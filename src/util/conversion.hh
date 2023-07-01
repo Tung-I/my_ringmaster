@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <sstream>
 
+
 int strict_stoi(const std::string & str, const int base = 10);
 long long strict_stoll(const std::string & str, const int base = 10);
 std::string double_to_string(const double input, const int precision = 2);

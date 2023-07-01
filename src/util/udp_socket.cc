@@ -10,9 +10,11 @@ bool UDPSocket::check_bytes_sent(const ssize_t bytes_sent,
                                  const size_t target) const
 {
   if (bytes_sent <= 0) {
-    if (bytes_sent == -1 and errno == EWOULDBLOCK) {
+    if (bytes_sent == -1 and errno == EWOULDBLOCK) { 
       return false; // return false to indicate EWOULDBLOCK
     }
+    // EWOULDBLOCK here indicates that the socket is in nonblocking mode
+    // yet the operation would have blocked.
 
     throw unix_error("UDPSocket:send()/sendto()");
   }
@@ -54,7 +56,7 @@ bool UDPSocket::check_bytes_received(const ssize_t bytes_received) const
 
     throw unix_error("UDPSocket:recv()/recvfrom()");
   }
-
+  // check for truncation
   if (static_cast<size_t>(bytes_received) > UDP_MTU) {
     throw runtime_error("UDPSocket::recv()/recvfrom(): datagram truncated");
   }

@@ -18,11 +18,12 @@
 using namespace std;
 using namespace chrono;
 
-// global variables in an unnamed namespace
+// Define global variables that are only visible to the current source file
 namespace {
   constexpr unsigned int BILLION = 1000 * 1000 * 1000;
 }
 
+// Print usage of the program
 void print_usage(const string & program_name)
 {
   cerr <<
@@ -34,6 +35,7 @@ void print_usage(const string & program_name)
   << endl;
 }
 
+// Receive a 'ConfigMsg' from a receiver
 pair<Address, ConfigMsg> recv_config_msg(UDPSocket & udp_sock)
 {
   // wait until a valid ConfigMsg is received
@@ -102,7 +104,7 @@ int main(int argc, char * argv[])
   // wait for a receiver to send 'ConfigMsg' and "connect" to it
   cerr << "Waiting for receiver..." << endl;
 
-  const auto & [peer_addr, config_msg] = recv_config_msg(udp_sock);
+  const auto & [peer_addr, config_msg] = recv_config_msg(udp_sock); 
   cerr << "Peer address: " << peer_addr.str() << endl;
   udp_sock.connect(peer_addr);
 

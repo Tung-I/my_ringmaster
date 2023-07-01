@@ -2,6 +2,8 @@
 
 using namespace std;
 
+
+// stoi throws an exception if the string cannot be converted to an integer.
 int strict_stoi(const string & str, const int base)
 {
   size_t pos;
@@ -14,6 +16,7 @@ int strict_stoi(const string & str, const int base)
   return ret;
 }
 
+// stoi throws an exception if the string cannot be converted to an long long
 long long strict_stoll(const string & str, const int base)
 {
   size_t pos;

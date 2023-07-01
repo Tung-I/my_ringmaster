@@ -20,10 +20,9 @@ void Datagram::set_mtu(const size_t mtu)
   if (mtu > 1500 or mtu < 512) {
     throw runtime_error("reasonable MTU is between 512 and 1500 bytes");
   }
-
-  // MTU - (IP + UDP headers) - Datagram header
-  max_payload = mtu - 28 - Datagram::HEADER_SIZE;
+  max_payload = mtu - 28 - Datagram::HEADER_SIZE;  // MTU - (IP + UDP headers) - Datagram header
 }
+
 
 bool Datagram::parse_from_string(const string & binary)
 {
@@ -31,7 +30,9 @@ bool Datagram::parse_from_string(const string & binary)
     return false; // datagram is too small to contain a header
   }
 
-  WireParser parser(binary);
+  WireParser parser(binary);  
+  // q: What would be the reasons to recreate a parser for every datagram? Why not just use a static parser?
+  // a: Because we need to parse the datagram header, which is different for every datagram.
   frame_id = parser.read_uint32();
   frame_type = static_cast<FrameType>(parser.read_uint8());
   frag_id = parser.read_uint16();
@@ -46,13 +47,13 @@ string Datagram::serialize_to_string() const
 {
   string binary;
   binary.reserve(HEADER_SIZE + payload.size());
-
+  // serialize the numbers in host byte order to binary data on wire
   binary += put_number(frame_id);
   binary += put_number(static_cast<uint8_t>(frame_type));
   binary += put_number(frag_id);
   binary += put_number(frag_cnt);
   binary += put_number(send_ts);
-  binary += payload;
+  binary += payload; 
 
   return binary;
 }
@@ -128,7 +129,7 @@ ConfigMsg::ConfigMsg(const uint16_t _width, const uint16_t _height,
 
 size_t ConfigMsg::serialized_size() const
 {
-  return Msg::serialized_size() + 3 * sizeof(uint16_t) + sizeof(uint32_t);
+  return Msg::serialized_size() + 3 * sizeof(uint16_t) + sizeof(uint32_t);  //
 }
 
 string ConfigMsg::serialize_to_string() const

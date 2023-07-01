@@ -47,7 +47,7 @@ int main(int argc, char * argv[])
     {"verbose", no_argument,       nullptr, 'v'},
     { nullptr,  0,                 nullptr,  0 },
   };
-
+  
   while (true) {
     const int opt = getopt_long(argc, argv, "o:v", cmd_line_opts, nullptr);
     if (opt == -1) {
@@ -85,16 +85,19 @@ int main(int argc, char * argv[])
   const auto port = narrow_cast<uint16_t>(strict_stoi(argv[optind + 1]));
   const auto width = narrow_cast<uint16_t>(strict_stoi(argv[optind + 2]));
   const auto height = narrow_cast<uint16_t>(strict_stoi(argv[optind + 3]));
-
+  
+ 
+  // create a UDP socket and "connect" it to the peer (sender)
   Address peer_addr{host, port};
   cerr << "Peer address: " << peer_addr.str() << endl;
 
-  // create a UDP socket and "connect" it to the peer (sender)
   UDPSocket udp_sock;
   udp_sock.connect(peer_addr);
   cerr << "Local address: " << udp_sock.local_address().str() << endl;
 
   // request a specific configuration
+  // q: where is the configmsg defined?
+  // a: 
   const ConfigMsg config_msg(width, height, frame_rate, target_bitrate);
   udp_sock.send(config_msg.serialize_to_string());
 

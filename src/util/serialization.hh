@@ -22,20 +22,20 @@ inline uint64_t hton(uint64_t host) { return htobe64(host); }
 template<typename T>
 std::string put_number(const T host)
 {
-  const T net = hton(host);
-  return {reinterpret_cast<const char *>(&net), sizeof(net)};
+  const T net = hton(host); // convert to network byte order
+  return {reinterpret_cast<const char *>(&net), sizeof(net)}; // convert to string
 }
 
 // deserialize binary data received on wire to a number in host byte order
-template<typename T>
-T get_number(const std::string_view net)
+template<typename T> 
+T get_number(const std::string_view net) // e.g., get_number<uint8_t>(data)
 {
   if (sizeof(T) > net.size()) {
     throw std::out_of_range("get_number(): read past end");
   }
 
   T ret;
-  memcpy(&ret, net.data(), sizeof(T));
+  memcpy(&ret, net.data(), sizeof(T)); 
 
   return ntoh(ret);
 }
@@ -46,12 +46,13 @@ uint16_t get_uint16(const char * net);
 uint32_t get_uint32(const char * net);
 uint64_t get_uint64(const char * net);
 
+
 // get the value of a bit range in the number
-// bit numbering is *MSB 0*, e.g., 0x01 is represented as:
-// binary: 0 0 0 0 0 0 0 1
-// index:  0 1 2 3 4 5 6 7
+/*  bit numbering is *MSB 0*, e.g., 0x01 is represented as:
+    binary: 0 0 0 0 0 0 0 1
+    index:  0 1 2 3 4 5 6 7 */
 template<typename T>
-T get_bits(const T number, const size_t bit_offset, const size_t bit_len)
+T get_bits(const T number, const size_t bit_offset, const size_t bit_len) // bit_len: number of bits to read
 {
   const size_t total_bits = sizeof(T) * 8;
 
@@ -59,8 +60,8 @@ T get_bits(const T number, const size_t bit_offset, const size_t bit_len)
     throw std::out_of_range("get_bits(): read past end");
   }
 
-  T ret = number >> (total_bits - bit_offset - bit_len);
-  ret &= (1 << bit_len) - 1;
+  T ret = number >> (total_bits - bit_offset - bit_len);  // get the bits we want to read to the rightmost position
+  ret &= (1 << bit_len) - 1; // get rid of the bits we don't want to read
 
   return ret;
 }
