@@ -130,7 +130,7 @@ int main(int argc, char * argv[])
 
   // initialize the encoder
   Encoder encoder(width, height, frame_rate, output_path);
-  encoder.set_target_bitrate(target_bitrate);
+  encoder.set_target_bitrate(target_bitrate); 
   encoder.set_verbose(verbose);
 
   Poller poller;

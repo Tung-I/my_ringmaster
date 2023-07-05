@@ -24,7 +24,7 @@ Encoder::Encoder(const uint16_t display_width,
   // open the output file
   if (not output_path.empty()) {
     output_fd_ = FileDescriptor(check_syscall(
-        open(output_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)));
+        open(output_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)));  
   }
 
   // populate VP9 configuration with default values
@@ -118,8 +118,9 @@ void Encoder::compress_frame(const RawImage & raw_img)
     output_fd_->write(to_string(frame_id_) + "," +
                       to_string(target_bitrate_) + "," +
                       to_string(frame_size) + "," +
-                      to_string(frame_generation_ts) + "," +
-                      to_string(frame_encoded_ts) + "\n");
+                      to_string(frame_generation_ts) + "," +  //us
+                      to_string(frame_encoded_ts) + ","  +  // us
+                      double_to_string(*ewma_rtt_us_ / 1000.0) + "\n");  // ms
   }
 
   // move onto the next frame
@@ -128,6 +129,7 @@ void Encoder::compress_frame(const RawImage & raw_img)
 
 void Encoder::encode_frame(const RawImage & raw_img)
 {
+  // check if the image dimensions match
   if (raw_img.display_width() != display_width_ or
       raw_img.display_height() != display_height_) {
     throw runtime_error("Encoder: image dimensions don't match");
@@ -135,8 +137,8 @@ void Encoder::encode_frame(const RawImage & raw_img)
 
   // check if a key frame needs to be encoded
   vpx_enc_frame_flags_t encode_flags = 0; // normal frame
-  if (not unacked_.empty()) {
-    const auto & first_unacked = unacked_.cbegin()->second;
+  if (not unacked_.empty()) { // some datagrams are unacked 
+    const auto & first_unacked = unacked_.cbegin()->second; // get the first unacked datagram
 
     // give up if first unacked datagram was initially sent MAX_UNACKED_US ago
     const auto us_since_first_send = timestamp_us() - first_unacked.send_ts;
@@ -166,7 +168,7 @@ void Encoder::encode_frame(const RawImage & raw_img)
                               encode_flags, VPX_DL_REALTIME),
              VPX_CODEC_OK, "failed to encode a frame");
   const auto encode_end = steady_clock::now();
-  const double encode_time_ms = duration<double, milli>(
+  const double encode_time_ms = duration<double, milli>( 
                                 encode_end - encode_start).count();
 
   // track stats in the current period
@@ -192,7 +194,7 @@ size_t Encoder::packetize_encoded_frame()
         throw runtime_error("Multiple frames were encoded at once");
       }
 
-      frame_size = encoder_pkt->data.frame.sz;
+      frame_size = encoder_pkt->data.frame.sz; 
       assert(frame_size > 0);
 
       // read the returned frame type
@@ -227,7 +229,7 @@ size_t Encoder::packetize_encoded_frame()
     }
   }
 
-  return frame_size;
+  return frame_size; 
 }
 
 void Encoder::add_unacked(const Datagram & datagram)
@@ -262,18 +264,19 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
   add_rtt_sample(curr_ts - ack->send_ts);
 
   // find the acked datagram in 'unacked_'
-  const auto acked_seq_num = make_pair(ack->frame_id, ack->frag_id);
-  auto acked_it = unacked_.find(acked_seq_num);
+  const auto acked_seq_num = make_pair(ack->frame_id, ack->frag_id); 
+  auto acked_it = unacked_.find(acked_seq_num); 
 
   if (acked_it == unacked_.end()) {
     // do nothing else if ACK is not for an unacked datagram
     return;
   }
-
+  
   // retransmit all unacked datagrams before the acked one (backward)
   for (auto rit = make_reverse_iterator(acked_it);
-       rit != unacked_.rend(); rit++) {
-    auto & datagram = rit->second;
+       rit != unacked_.rend(); rit++) { 
+    auto & datagram = rit->second; // rit->second is the value, which is a datagram
+                                   // rit->first is the key, which is a pair of frame_id and frag_id
 
     // skip if a datagram has been retransmitted MAX_NUM_RTX times
     if (datagram.num_rtx >= MAX_NUM_RTX) {
@@ -295,12 +298,13 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
   unacked_.erase(acked_it);
 }
 
+// add a new RTT sample to 'min_rtt_us_' and 'ewma_rtt_us_'
 void Encoder::add_rtt_sample(const unsigned int rtt_us)
 {
   // min RTT
   if (not min_rtt_us_ or rtt_us < *min_rtt_us_) {
     min_rtt_us_ = rtt_us;
-  }
+  } 
 
   // EWMA RTT
   if (not ewma_rtt_us_) {
@@ -312,6 +316,7 @@ void Encoder::add_rtt_sample(const unsigned int rtt_us)
 
 void Encoder::output_periodic_stats()
 {
+  // output encoding stats every ~1s
   cerr << "Frames encoded in the last ~1s: " << num_encoded_frames_ << endl;
 
   if (num_encoded_frames_ > 0) {
@@ -325,7 +330,7 @@ void Encoder::output_periodic_stats()
          << "/" << double_to_string(*ewma_rtt_us_ / 1000.0) << endl;
   }
 
-  // reset all but RTT-related stats
+  // reset all but RTT-related stats (keep track of the min RTT and EWMA RTT)
   num_encoded_frames_ = 0;
   total_encode_time_ms_ = 0.0;
   max_encode_time_ms_ = 0.0;

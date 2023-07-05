@@ -230,8 +230,9 @@ void Decoder::consume_next_frame()
       const auto frame_decodable_ts = timestamp_us();
 
       output_fd_->write(to_string(next_frame_) + "," +
-                        to_string(frame_size) + "," +
-                        to_string(frame_decodable_ts) + "\n");
+                        to_string(frame_size) + "," + 
+                        to_string(frame_decodable_ts) + "," + 
+                        to_string(num_decodable_frames_) + "\n");
     }
   }
 

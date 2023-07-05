@@ -30,13 +30,13 @@ public:
   void compress_frame(const RawImage & raw_img);
 
   // add a transmitted but unacked datagram (except retransmissions) to unacked
-  void add_unacked(const Datagram & datagram);
+  void add_unacked(const Datagram & datagram); 
   void add_unacked(Datagram && datagram);
 
   // handle ACK
   void handle_ack(const std::shared_ptr<AckMsg> & ack);
 
-  // output stats every second and reset some of them
+  // output stats every second 
   void output_periodic_stats();
 
   // set target bitrate
@@ -44,7 +44,7 @@ public:
 
   // accessors
   uint32_t frame_id() const { return frame_id_; }
-  std::deque<Datagram> & send_buf() { return send_buf_; }
+  std::deque<Datagram> & send_buf() { return send_buf_; } 
   std::map<SeqNum, Datagram> & unacked() { return unacked_; }
 
   // mutators
@@ -86,7 +86,7 @@ private:
   std::optional<double> ewma_rtt_us_ {};
   static constexpr double ALPHA = 0.2;
 
-  // performance stats
+  // Performance stats
   unsigned int num_encoded_frames_ {0};
   double total_encode_time_ms_ {0.0};
   double max_encode_time_ms_ {0.0};
