@@ -9,7 +9,7 @@ Datagram::Datagram(const uint32_t _frame_id,
                    const uint16_t _frag_id,
                    const uint16_t _frag_cnt,
                    const string_view _payload)
-  : frame_id(_frame_id), frame_type(_frame_type),
+  : frame_id(_frame_id), frame_type(_frame_type), 
     frag_id(_frag_id), frag_cnt(_frag_cnt), payload(_payload)
 {}
 
@@ -31,8 +31,6 @@ bool Datagram::parse_from_string(const string & binary)
   }
 
   WireParser parser(binary);  
-  // q: What would be the reasons to recreate a parser for every datagram? Why not just use a static parser?
-  // a: Because we need to parse the datagram header, which is different for every datagram.
   frame_id = parser.read_uint32();
   frame_type = static_cast<FrameType>(parser.read_uint8());
   frag_id = parser.read_uint16();

@@ -63,31 +63,31 @@ def plot_encoder(filename, save_folder, fps=24):
     plt.clf()
 
 
-def plot_decoder(filename, save_folder, fps=24):
-    # Read the data from the txt file (frame_id,frame_size_in_byte,frame_decodable_timestamp_in_us)
-    data = np.loadtxt(filename, delimiter=',')
-
-    # Calculate throughput (bitrate); the x-axis is time (sec), the y-axis is bitrate (kbps)
-    actual_bitrate = np.zeros(data.shape[0])
+def plot_throughput(filename, save_folder, fps=24):
+    data = np.loadtxt(filename, delimiter=',')  # [frame_id,frame_size_in_byte,frame_decodable_timestamp_in_us]
+    # Calculate throughput (bitrate) per frame in Mbps
+    bitrate = np.zeros(data.shape[0])
     for i in range(data.shape[0]):
-        # calculate actual bitrate in kbps
-        actual_bitrate[i] = (data[i,1] * 8 / 1000)
-    # Re-scale the x_axis to time (sec); it should be n_frame / fps
-    x_axis = np.arange(0, actual_bitrate.shape[0], fps) / fps
-    # Accumulate the bitrate within each second (i.e., 24 frames), and then reset the counter in the next second
-    # The x-axis is time (sec), the y-axis is average bitrate (kbpss) within each second
-    actual_bitrate = np.cumsum(actual_bitrate)
-    actual_bitrate = actual_bitrate[::fps]
-    for i in range(actual_bitrate.shape[0]-1, 0, -1):
-        actual_bitrate[i] = actual_bitrate[i] - actual_bitrate[i-1]
-    # Plot actual bitrate
-    plt.plot(x_axis, actual_bitrate, 'c-')
+        bitrate[i] = (data[i,1] * 8 / 1000000) # bytes -> Mbits
+    # Accumulate the bitrate within each second (i.e., every 24 frames)
+    # so that the x-axis is time (sec) and the y-axis is average bitrate (kbps) within each second
+    bitrate = np.cumsum(bitrate)
+    bitrate = bitrate[::fps]
+    for i in range(bitrate.shape[0]-1, 0, -1):
+        bitrate[i] = bitrate[i] - bitrate[i-1]
+    # Remove the first 2*fps frames (i.e., 2 second) because the throughput is not stable
+    bitrate = bitrate[2:]
+    # Preprar the x-axis
+    x_axis = np.arange(0, bitrate.shape[0])
+    # Plot bitrate
+    plt.plot(x_axis, bitrate, 'c-')
     # Set title and labels
-    plt.title("Throughput (Bitrate)")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Bitrate (kbps)")
+    plt.xlabel("Streaming Time (s)")
+    plt.ylabel("Throughput (Mbps)")
+    # Set the legend
+    plt.legend(['Baseline'])
     # Save figure
-    save_path = os.path.join(save_folder, 'receiver_bitrate.png')
+    save_path = os.path.join(save_folder, 'throughput.png')
     plt.savefig(save_path)
     # Clear figure
     plt.clf()
@@ -95,14 +95,14 @@ def plot_decoder(filename, save_folder, fps=24):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--log1', required=True, help='encoder log path')
-    parser.add_argument('--log2', required=True, help='decoder log path')
-    parser.add_argument('--output', required=True, help='output figure path')
+    parser.add_argument('-t', '--throughput', required=False, help='file path')
+    parser.add_argument('-r', '--rtt', required=False, help='file path')
+    parser.add_argument('--fps', required=False, default=24, type=int, help='FPS')
+    parser.add_argument('-o', '--output', required=True, help='output folder')
     args = parser.parse_args()
 
-    # Call plot_encoder
-    plot_encoder(args.log1, args.output)
-    plot_decoder(args.log2, args.output)
+    if args.throughput is not None:
+        plot_throughput(args.throughput, args.output, fps=args.fps) 
 
 if __name__ == '__main__':
     main()

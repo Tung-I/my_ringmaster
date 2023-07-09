@@ -30,6 +30,7 @@ inline int check_syscall(const int return_value, const std::string & tag)
   throw unix_error(tag);
 }
 
+// check if actual_return == expected_return; throw runtime_error if not
 template<typename T>
 inline void check_call(const T & actual_return, const T & expected_return,
                        const std::string & error_msg = "check_call")

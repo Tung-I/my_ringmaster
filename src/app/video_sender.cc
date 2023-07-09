@@ -122,15 +122,32 @@ int main(int argc, char * argv[])
   // set UDP socket to non-blocking now
   udp_sock.set_blocking(false);
 
-  // open the video file
-  YUV4MPEG video_input(y4m_path, width, height);
+  // open the video files
+  const string y4m_path_1080p = y4m_path.substr(0, y4m_path.size() - 4) + "_1080.y4m";
+  YUV4MPEG video_input_1080p(y4m_path_1080p, 1080, 1080);  
+  const string output_path_720p = y4m_path.substr(0, y4m_path.size() - 4) + "_720.y4m";
+  YUV4MPEG video_input_720p(y4m_path_720p, 720, 720); 
+  const string output_path_480p = y4m_path.substr(0, y4m_path.size() - 4) + "_480.y4m";
+  YUV4MPEG video_input_480p(y4m_path_480p, 480, 480); 
+  const string output_path_360p = y4m_path.substr(0, y4m_path.size() - 4) + "_360.y4m";
+  YUV4MPEG video_input_360p(y4m_path_360p, 360, 360); 
 
-  // allocate a raw image
-  RawImage raw_img(width, height);
+  // set the current video input to 1080p
+  YUV4MPEG video_input = video_input_1080p;
+
+  // allocate a raw image for storing the current frame
+  // RawImage raw_img(width, height);
+  RawImage raw_img_1080p(1080, 1080);
+  RawImage raw_img_720p(720, 720);
+  RawImage raw_img_480p(480, 480);
+  RawImage raw_img_360p(360, 360);
+
+  // set the current raw image to 1080p
+  RawImage raw_img = raw_img_1080p;
 
   // initialize the encoder
   Encoder encoder(width, height, frame_rate, output_path);
-  encoder.set_target_bitrate(target_bitrate); 
+  encoder.set_target_bitrate(target_bitrate);
   encoder.set_verbose(verbose);
 
   Poller poller;
@@ -141,7 +158,7 @@ int main(int argc, char * argv[])
   fps_timer.set_time(frame_interval, frame_interval);
 
   // read a raw frame when the periodic timer fires
-  poller.register_event(fps_timer, Poller::In,
+  poller.register_event(fps_timer, Poller::In, 
     [&]()
     {
       // being lenient: read raw frames 'num_exp' times and use the last one
@@ -171,7 +188,7 @@ int main(int argc, char * argv[])
   poller.register_event(udp_sock, Poller::Out,
     [&]()
     {
-      deque<Datagram> & send_buf = encoder.send_buf();
+      deque<Datagram> & send_buf = encoder.send_buf(); 
 
       while (not send_buf.empty()) {
         auto & datagram = send_buf.front();
@@ -207,8 +224,8 @@ int main(int argc, char * argv[])
   );
 
   // when UDP socket is readable
-  poller.register_event(udp_sock, Poller::In,
-    [&]()
+  poller.register_event(udp_sock, Poller::In, 
+    [&]() 
     {
       while (true) {
         const auto & raw_data = udp_sock.recv();
@@ -218,25 +235,45 @@ int main(int argc, char * argv[])
         }
         const shared_ptr<Msg> msg = Msg::parse_from_string(*raw_data);
 
-        // ignore invalid or non-ACK messages
-        if (msg == nullptr or msg->type != Msg::Type::ACK) {
+        // handle the CONFIG message
+        if (msg->type == Msg::Type::CONFIG) {
+          const auto config = dynamic_pointer_cast<ConfigMsg>(msg);
+
+          
+          cerr << "Received CONFIG: width=" << config->width
+                << ", height=" << config->height
+                << ", fps=" << config->frame_rate
+                << ", br=" << config->target_bitrate << endl;
+          
+
+          // update the encoder's configuration
+          encoder.set_target_bitrate(config->target_bitrate);
+          encoder.set_resolution(config->width, config->height);
           return;
         }
 
-        const auto ack = dynamic_pointer_cast<AckMsg>(msg);
+        // handle the ACK message
+        if (msg->type == Msg::Type::ACK) {
+          const auto ack = dynamic_pointer_cast<AckMsg>(msg); 
 
-        if (verbose) {
-          cerr << "Received ACK: frame_id=" << ack->frame_id
-               << " frag_id=" << ack->frag_id << endl;
+          if (verbose) {
+            cerr << "Received ACK: frame_id=" << ack->frame_id
+                << " frag_id=" << ack->frag_id << endl;
+          }
+
+          // RTT estimation, retransmission, etc.
+          encoder.handle_ack(ack);
+
+          // send_buf might contain datagrams to be retransmitted now
+          if (not encoder.send_buf().empty()) {
+            poller.activate(udp_sock, Poller::Out);
+          }
+
+          return;
         }
 
-        // RTT estimation, retransmission, etc.
-        encoder.handle_ack(ack);
-
-        // send_buf might contain datagrams to be retransmitted now
-        if (not encoder.send_buf().empty()) {
-          poller.activate(udp_sock, Poller::Out);
-        }
+        // ignore invalid messages
+        return;
       }
     }
   );
@@ -260,7 +297,7 @@ int main(int argc, char * argv[])
 
   // main loop
   while (true) {
-    poller.poll(-1);
+    poller.poll(-1); 
   }
 
   return EXIT_SUCCESS;

@@ -96,14 +96,25 @@ int main(int argc, char * argv[])
   cerr << "Local address: " << udp_sock.local_address().str() << endl;
 
   // request a specific configuration
-  // q: where is the configmsg defined?
-  // a: 
-  const ConfigMsg config_msg(width, height, frame_rate, target_bitrate);
-  udp_sock.send(config_msg.serialize_to_string());
+  const ConfigMsg init_config_msg(width, height, frame_rate, target_bitrate); 
+  udp_sock.send(init_config_msg.serialize_to_string());
 
   // initialize decoder
   Decoder decoder(width, height, lazy_level, output_path);
   decoder.set_verbose(verbose);
+
+
+
+  // declare variables for bitrate control
+  // unsigned int cfg_count = 0;
+  // unsigned int cfg_idx = 0;
+  // declare a vector that contains candidates of bitrates
+  // vector<unsigned int> bitrates = {8000, 5000, 2500, 1000};
+  // vector<unsigned int> resolution = {1080, 720, 480, 360};
+  // timers
+  const auto start_time = steady_clock::now();
+  // auto last_time = steady_clock::now();
+
 
   // main loop
   while (true) {
@@ -129,6 +140,20 @@ int main(int argc, char * argv[])
     while (decoder.next_frame_complete()) {
       // depending on the lazy level, might decode and display the next frame
       decoder.consume_next_frame();
+    }
+
+    // send a new config every 5s
+    // if (steady_clock::now() - last_time > seconds(5)) {
+    //   cfg_idx = cfg_count % bitrates.size();
+    //   cfg_count++; 
+    //   last_time = steady_clock::now();
+    //   ConfigMsg config_msg(resolution[cfg_idx], resolution[cfg_idx], frame_rate, bitrates[cfg_idx]);
+    //   udp_sock.send(config_msg.serialize_to_string());
+    // }
+
+    // break if now()-start_time > 30s
+    if (steady_clock::now() - start_time > seconds(30)) {
+      break;
     }
   }
 

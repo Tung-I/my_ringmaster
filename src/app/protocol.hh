@@ -22,14 +22,14 @@ struct Datagram
   Datagram(const uint32_t _frame_id,
            const FrameType _frame_type,
            const uint16_t _frag_id,
-           const uint16_t _frag_cnt,
+           const uint16_t _frag_cnt, 
            const std::string_view _payload);
 
   uint32_t frame_id {};    
   FrameType frame_type {}; 
   uint16_t frag_id {};    
   uint16_t frag_cnt {};    
-  uint64_t send_ts {};     
+  uint64_t send_ts {}; // be passed by video sender 
   std::string payload {};  
 
   // retransmission-related
@@ -91,7 +91,7 @@ struct ConfigMsg : Msg
 {
   ConfigMsg() : Msg(Type::CONFIG) {} 
   ConfigMsg(const uint16_t _width, const uint16_t _height,
-            const uint16_t _frame_rate, const uint32_t _target_bitrate);
+            const uint16_t _frame_rate, const uint32_t _target_bitrate);  
 
   uint16_t width {};         
   uint16_t height {};         

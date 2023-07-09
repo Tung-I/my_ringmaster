@@ -39,7 +39,7 @@ public:
   // output stats every second 
   void output_periodic_stats();
 
-  // set target bitrate
+  // set parameters
   void set_target_bitrate(const unsigned int bitrate_kbps);
 
   // accessors

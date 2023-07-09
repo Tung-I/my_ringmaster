@@ -78,7 +78,7 @@ void Frame::insert_frag(Datagram && datagram)
     frame_size_ += datagram.payload.size();
     null_frags_--;
     frags_[datagram.frag_id] = move(datagram);
-  }
+  } 
 }
 
 Decoder::Decoder(const uint16_t display_width,
@@ -138,7 +138,7 @@ void Decoder::add_datagram(const Datagram & datagram)
   }
 
   // copy the fragment into the frame
-  frame_buf_.at(datagram.frame_id).insert_frag(datagram);
+  frame_buf_.at(datagram.frame_id).insert_frag(datagram); 
 }
 
 void Decoder::add_datagram(Datagram && datagram)
@@ -155,8 +155,11 @@ bool Decoder::next_frame_complete()
 {
   {
     // check if the next frame to expect is complete
+    // (if the frame is in the frame buffer and all of its fragments are received)
     auto it = as_const(frame_buf_).find(next_frame_);
-    if (it != frame_buf_.end() and it->second.complete()) {
+    // The frame buffer is a map from frame ID to Frame instance.
+    // The Frame instance has a vector of optional<Datagram> for all fragments
+    if (it != frame_buf_.end() and it->second.complete()) { 
       return true;
     }
   }
@@ -195,7 +198,7 @@ void Decoder::consume_next_frame()
   num_decodable_frames_++;
   const size_t frame_size = frame.frame_size().value();
   total_decodable_frame_size_ += frame_size;
-
+  // output stats 
   const auto stats_now = steady_clock::now();
   while (stats_now >= last_stats_time_ + 1s) {
     cerr << "Decodable frames in the last ~1s: "
@@ -222,7 +225,7 @@ void Decoder::consume_next_frame()
       shared_queue_.emplace_back(move(frame));
     } // release the lock before notifying the worker thread
 
-    // notify worker thread
+    // notify worker thread 
     cv_.notify_one();
   } else {
     // main thread outputs frame information if no worker thread
@@ -273,7 +276,7 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
   uint8_t * buf_ptr = decode_buf.data();
   const uint8_t * const buf_end = buf_ptr + decode_buf.size();
 
-  for (const auto & datagram : frame.frags()) {
+  for (const auto & datagram : frame.frags()) { 
     const string & payload = datagram.value().payload;
 
     if (buf_ptr + payload.size() >= buf_end) {
@@ -288,7 +291,7 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
 
   // decode the compressed frame in 'decode_buf'
   const auto decode_start = steady_clock::now();
-  check_call(vpx_codec_decode(&context, decode_buf.data(), frame_size,
+  check_call(vpx_codec_decode(&context, decode_buf.data(), frame_size, 
                               nullptr, 1),
              VPX_CODEC_OK, "failed to decode a frame");
   const auto decode_end = steady_clock::now();
@@ -393,7 +396,7 @@ void Decoder::worker_main()
       max_decode_time_ms = max(max_decode_time_ms, decode_time_ms);
 
       // worker thread also outputs stats roughly every second
-      const auto stats_now = steady_clock::now();
+      const auto stats_now = steady_clock::now();  
       while (stats_now >= last_stats_time + 1s) {
         if (num_decoded_frames > 0) {
           cerr << "[worker] Avg/Max decoding time (ms) of "

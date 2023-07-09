@@ -12,7 +12,7 @@ void Poller::register_event(const int fd,
 {
   if (not roster_.count(fd)) { // fd is not registered yet
     roster_[fd][flag] = callback;
-    active_events_[fd] = flag;
+    active_events_[fd] = flag; 
   }
   else { // fd is registered but flag should not be registered yet
     if (roster_[fd].count(flag)) {
@@ -84,14 +84,14 @@ void Poller::poll(const int timeout_ms)
     }
   }
 
-  check_syscall(::poll(fds_to_poll.data(), fds_to_poll.size(), timeout_ms));
+  check_syscall(::poll(fds_to_poll.data(), fds_to_poll.size(), timeout_ms));  
 
   for (const auto & it : fds_to_poll) {
     for (const auto & [flag, callback] : roster_.at(it.fd)) {
-      if (it.revents & flag) {
+      if (it.revents & flag) { 
         assert(it.events & flag); // returned event must have been requested
         callback(); // execute the callback function
-      }
+      } 
     }
   }
 }

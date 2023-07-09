@@ -342,5 +342,5 @@ void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)
 
   cfg_.rc_target_bitrate = target_bitrate_;
   check_call(vpx_codec_enc_config_set(&context_, &cfg_),
-             VPX_CODEC_OK, "set_target_bitrate");
+             VPX_CODEC_OK, "set_target_bitrate");  
 }

@@ -39,6 +39,8 @@ public:
   void insert_frag(Datagram && datagram);
 
   // if the frame has received all fragments
+  // q: How to know if all fragments have been received?
+  // a: The frame size is known, so we can check if the frame size is equal to the sum of the fragment sizes.
   bool complete() const { return null_frags_ == 0; }
   std::optional<size_t> frame_size() const;
 
@@ -125,8 +127,8 @@ private:
   std::chrono::time_point<std::chrono::steady_clock> last_stats_time_ {};
 
   // shared between main (Decoder) and worker threads
-  std::mutex mtx_ {};
-  std::condition_variable cv_ {};
+  std::mutex mtx_ {}; 
+  std::condition_variable cv_ {}; 
   std::deque<Frame> shared_queue_ {};
 
   // worker thread for decoding and displaying frames
@@ -143,7 +145,7 @@ private:
 
   // worker thread calls the functions below
   double decode_frame(vpx_codec_ctx_t & context, const Frame & frame);
-  void display_decoded_frame(vpx_codec_ctx_t & context, VideoDisplay & display);
+  void display_decoded_frame(vpx_codec_ctx_t & context, VideoDisplay & display); 
   void worker_main();
 };
 
