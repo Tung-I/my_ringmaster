@@ -95,66 +95,96 @@ int main(int argc, char * argv[])
   }
 
   const auto port = narrow_cast<uint16_t>(strict_stoi(argv[optind]));
+  // open another port for RTCP
+  const auto rtcp_port = narrow_cast<uint16_t>(port + 1);
+
+  // video file path 
   const string y4m_path = argv[optind + 1];
 
-  UDPSocket udp_sock;
-  udp_sock.bind({"0", port});
-  cerr << "Local address: " << udp_sock.local_address().str() << endl;
+  // open the UDP socket
+  UDPSocket udp_sock_rtp;
+  udp_sock_rtp.bind({"0", port});
+  cerr << "Local address: " << udp_sock_rtp.local_address().str() << endl;
+  UDPSocket udp_sock_rtcp;
+  udp_sock_rtcp.bind({"0", rtcp_port});
+  cerr << "Local address: " << udp_sock_rtcp.local_address().str() << endl;
 
   // wait for a receiver to send 'ConfigMsg' and "connect" to it
   cerr << "Waiting for receiver..." << endl;
-
-  const auto & [peer_addr, config_msg] = recv_config_msg(udp_sock); 
+  const auto & [peer_addr, config_msg] = recv_config_msg(udp_sock_rtp); 
   cerr << "Peer address: " << peer_addr.str() << endl;
-  udp_sock.connect(peer_addr);
+  udp_sock_rtp.connect(peer_addr);
+  udp_sock_rtcp.connect(peer_addr);
 
   // read configuration from the peer
-  const auto width = config_msg.width;
-  const auto height = config_msg.height;
-  const auto frame_rate = config_msg.frame_rate;
-  const auto target_bitrate = config_msg.target_bitrate;
+  const auto curr_width = config_msg.width;
+  const auto curr_height = config_msg.height;
+  const auto curr_frame_rate = config_msg.frame_rate;
+  const auto curr_target_bitrate = config_msg.target_bitrate;
 
-  cerr << "Received config: width=" << to_string(width)
-       << " height=" << to_string(height)
-       << " FPS=" << to_string(frame_rate)
-       << " bitrate=" << to_string(target_bitrate) << endl;
+  cerr << "Received config: width=" << to_string(curr_width)
+       << " height=" << to_string(curr_height)
+       << " FPS=" << to_string(curr_frame_rate)
+       << " bitrate=" << to_string(curr_target_bitrate) << endl;
 
   // set UDP socket to non-blocking now
-  udp_sock.set_blocking(false);
+  udp_sock_rtp.set_blocking(false);
+  udp_sock_rtcp.set_blocking(false);
 
   // open the video files
-  const string y4m_path_1080p = y4m_path.substr(0, y4m_path.size() - 4) + "_1080.y4m";
+  const string y4m_path_1080p = y4m_path.substr(0, y4m_path.size() - 4) + "_1080p.y4m";
   YUV4MPEG video_input_1080p(y4m_path_1080p, 1080, 1080);  
-  const string output_path_720p = y4m_path.substr(0, y4m_path.size() - 4) + "_720.y4m";
+  const string y4m_path_720p = y4m_path.substr(0, y4m_path.size() - 4) + "_720p.y4m";
   YUV4MPEG video_input_720p(y4m_path_720p, 720, 720); 
-  const string output_path_480p = y4m_path.substr(0, y4m_path.size() - 4) + "_480.y4m";
+  const string y4m_path_480p = y4m_path.substr(0, y4m_path.size() - 4) + "_480p.y4m";
   YUV4MPEG video_input_480p(y4m_path_480p, 480, 480); 
-  const string output_path_360p = y4m_path.substr(0, y4m_path.size() - 4) + "_360.y4m";
+  const string y4m_path_360p = y4m_path.substr(0, y4m_path.size() - 4) + "_360p.y4m";
   YUV4MPEG video_input_360p(y4m_path_360p, 360, 360); 
-
-  // set the current video input to 1080p
-  YUV4MPEG video_input = video_input_1080p;
+  map<int, YUV4MPEG*> video_input_map = {
+    {1080, &video_input_1080p},
+    {720, &video_input_720p},
+    {480, &video_input_480p},
+    {360, &video_input_360p}
+  };
 
   // allocate a raw image for storing the current frame
-  // RawImage raw_img(width, height);
   RawImage raw_img_1080p(1080, 1080);
   RawImage raw_img_720p(720, 720);
   RawImage raw_img_480p(480, 480);
   RawImage raw_img_360p(360, 360);
+  map<int, RawImage*> raw_img_map = {
+    {1080, &raw_img_1080p},
+    {720, &raw_img_720p},
+    {480, &raw_img_480p},
+    {360, &raw_img_360p}
+  };
 
-  // set the current raw image to 1080p
-  RawImage raw_img = raw_img_1080p;
-
-  // initialize the encoder
-  Encoder encoder(width, height, frame_rate, output_path);
-  encoder.set_target_bitrate(target_bitrate);
-  encoder.set_verbose(verbose);
+  // initialize the encoders
+  Encoder encoder_1080p(1080, 1080, curr_frame_rate, output_path);
+  encoder_1080p.set_target_bitrate(8000);
+  encoder_1080p.set_verbose(verbose);
+  Encoder encoder_720p(720, 720, curr_frame_rate, output_path);
+  encoder_720p.set_target_bitrate(5000);
+  encoder_720p.set_verbose(verbose);
+  Encoder encoder_480p(480, 480, curr_frame_rate, output_path);
+  encoder_480p.set_target_bitrate(2500);
+  encoder_480p.set_verbose(verbose);
+  Encoder encoder_360p(360, 360, curr_frame_rate, output_path);
+  encoder_360p.set_target_bitrate(1000);
+  encoder_360p.set_verbose(verbose);
+  // map from resolution to encoder (use pointer to avoid copying)
+  map<int, Encoder*> encoder_map = {
+    {1080, &encoder_1080p},
+    {720, &encoder_720p},
+    {480, &encoder_480p},
+    {360, &encoder_360p}
+  };
 
   Poller poller;
 
   // create a periodic timer with the same period as the frame interval
   Timerfd fps_timer;
-  const timespec frame_interval {0, static_cast<long>(BILLION / frame_rate)};
+  const timespec frame_interval {0, static_cast<long>(BILLION / curr_frame_rate)};
   fps_timer.set_time(frame_interval, frame_interval);
 
   // read a raw frame when the periodic timer fires
@@ -169,88 +199,105 @@ int main(int argc, char * argv[])
 
       for (unsigned int i = 0; i < num_exp; i++) {
         // fetch a raw frame into 'raw_img' from the video input
-        if (not video_input.read_frame(raw_img)) {
+        if (not video_input_1080p.read_frame(raw_img_1080p)) {
+          throw runtime_error("Reached the end of video input");
+        }
+        if (not video_input_720p.read_frame(raw_img_720p)) {
+          throw runtime_error("Reached the end of video input");
+        }
+        if (not video_input_480p.read_frame(raw_img_480p)) {
+          throw runtime_error("Reached the end of video input");
+        }
+        if (not video_input_360p.read_frame(raw_img_360p)) {
           throw runtime_error("Reached the end of video input");
         }
       }
+
+      // check the current config resolution and get the corresponding raw image and encoder (by reference)
+      RawImage & raw_img = *raw_img_map[curr_width];
+      Encoder & encoder = *encoder_map[curr_width];
 
       // compress 'raw_img' into frame 'frame_id' and packetize it
       encoder.compress_frame(raw_img);
 
       // interested in socket being writable if there are datagrams to send
       if (not encoder.send_buf().empty()) {
-        poller.activate(udp_sock, Poller::Out);
+        poller.activate(udp_sock_rtp, Poller::Out);
       }
     }
   );
 
   // when UDP socket is writable
-  poller.register_event(udp_sock, Poller::Out,
+  poller.register_event(udp_sock_rtp, Poller::Out,
     [&]()
     {
-      deque<Datagram> & send_buf = encoder.send_buf(); 
+      // iterate through the encoder_map and send the datagrams
+      for (auto & kv : encoder_map) {
+        deque<Datagram> & send_buf = kv.second->send_buf(); 
 
-      while (not send_buf.empty()) {
-        auto & datagram = send_buf.front();
+        while (not send_buf.empty()) {
+          auto & datagram = send_buf.front();
 
-        // timestamp the sending time before sending
-        datagram.send_ts = timestamp_us();
+          // timestamp the sending time before sending
+          datagram.send_ts = timestamp_us();
 
-        if (udp_sock.send(datagram.serialize_to_string())) {
-          if (verbose) {
-            cerr << "Sent datagram: frame_id=" << datagram.frame_id
-                 << " frag_id=" << datagram.frag_id
-                 << " frag_cnt=" << datagram.frag_cnt
-                 << " rtx=" << datagram.num_rtx << endl;
+          if (udp_sock_rtp.send(datagram.serialize_to_string())) {
+            if (verbose) {
+              cerr << "Sent datagram: frame_id=" << datagram.frame_id
+                  << " frag_id=" << datagram.frag_id
+                  << " frag_cnt=" << datagram.frag_cnt
+                  << " rtx=" << datagram.num_rtx << endl;
+            }
+
+            // move the sent datagram to unacked if not a retransmission
+            if (datagram.num_rtx == 0) {
+              kv.second->add_unacked(move(datagram));
+            }
+
+            send_buf.pop_front();
+          } else { // EWOULDBLOCK; try again later; datagram is not removed from the send_buf
+            datagram.send_ts = 0; 
+            break;
           }
-
-          // move the sent datagram to unacked if not a retransmission
-          if (datagram.num_rtx == 0) {
-            encoder.add_unacked(move(datagram));
-          }
-
-          send_buf.pop_front();
-        } else { // EWOULDBLOCK; try again later
-          datagram.send_ts = 0; // since it wasn't sent successfully
-          break;
         }
-      }
 
-      // not interested in socket being writable if no datagrams to send
-      if (send_buf.empty()) {
-        poller.deactivate(udp_sock, Poller::Out);
-      }
+        // not interested in socket being writable if no datagrams to send
+        if (send_buf.empty()) {
+          poller.deactivate(udp_sock_rtp, Poller::Out);
+        }
+      }  
+      // end of the event
     }
   );
 
   // when UDP socket is readable
-  poller.register_event(udp_sock, Poller::In, 
+  poller.register_event(udp_sock_rtp, Poller::In, 
     [&]() 
     {
       while (true) {
-        const auto & raw_data = udp_sock.recv();
+        const auto & raw_data = udp_sock_rtp.recv();
 
         if (not raw_data) { // EWOULDBLOCK; try again when data is available
           break;
         }
         const shared_ptr<Msg> msg = Msg::parse_from_string(*raw_data);
 
-        // handle the CONFIG message
-        if (msg->type == Msg::Type::CONFIG) {
-          const auto config = dynamic_pointer_cast<ConfigMsg>(msg);
+        // // handle the CONFIG message
+        // if (msg->type == Msg::Type::CONFIG) {
+        //   const auto config = dynamic_pointer_cast<ConfigMsg>(msg);
 
           
-          cerr << "Received CONFIG: width=" << config->width
-                << ", height=" << config->height
-                << ", fps=" << config->frame_rate
-                << ", br=" << config->target_bitrate << endl;
+        //   cerr << "Received CONFIG: width=" << config->width
+        //         << ", height=" << config->height
+        //         << ", fps=" << config->frame_rate
+        //         << ", br=" << config->target_bitrate << endl;
           
 
-          // update the encoder's configuration
-          encoder.set_target_bitrate(config->target_bitrate);
-          encoder.set_resolution(config->width, config->height);
-          return;
-        }
+        //   // update the encoder's configuration
+        //   encoder.set_target_bitrate(config->target_bitrate);
+        //   encoder.set_resolution(config->width, config->height);
+        //   return;
+        // }
 
         // handle the ACK message
         if (msg->type == Msg::Type::ACK) {
@@ -262,11 +309,12 @@ int main(int argc, char * argv[])
           }
 
           // RTT estimation, retransmission, etc.
-          encoder.handle_ack(ack);
-
-          // send_buf might contain datagrams to be retransmitted now
-          if (not encoder.send_buf().empty()) {
-            poller.activate(udp_sock, Poller::Out);
+          for (auto & kv : encoder_map) { 
+            kv.second->handle_ack(ack);
+            // send_buf might contain datagrams to be retransmitted now
+            if (not kv.second->send_buf().empty()) {
+              poller.activate(udp_sock_rtp, Poller::Out);
+            }
           }
 
           return;
@@ -291,7 +339,9 @@ int main(int argc, char * argv[])
       }
 
       // output stats every second
-      encoder.output_periodic_stats();
+      for (auto & kv : encoder_map) {
+        kv.second->output_periodic_stats();
+      }
     }
   );
 

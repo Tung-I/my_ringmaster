@@ -99,11 +99,21 @@ int main(int argc, char * argv[])
   const ConfigMsg init_config_msg(width, height, frame_rate, target_bitrate); 
   udp_sock.send(init_config_msg.serialize_to_string());
 
-  // initialize decoder
-  Decoder decoder(width, height, lazy_level, output_path);
-  decoder.set_verbose(verbose);
-
-
+  // initialize decoders
+  Decoder decoder_1080p(1080, 1080, lazy_level, output_path);
+  decoder_1080p.set_verbose(verbose);
+  Decoder decoder_720p(720, 720, lazy_level, output_path);
+  decoder_720p.set_verbose(verbose);
+  Decoder decoder_480p(480, 480, lazy_level, output_path);
+  decoder_480p.set_verbose(verbose);
+  Decoder decoder_360p(360, 360, lazy_level, output_path);
+  decoder_360p.set_verbose(verbose);
+  map<int, Decoder*> decoder_map = {
+    {1080, &decoder_1080p},
+    {720, &decoder_720p},
+    {480, &decoder_480p},
+    {360, &decoder_360p}
+  };
 
   // declare variables for bitrate control
   // unsigned int cfg_count = 0;
@@ -130,10 +140,14 @@ int main(int argc, char * argv[])
 
     if (verbose) {
       cerr << "Acked datagram: frame_id=" << datagram.frame_id
-           << " frag_id=" << datagram.frag_id << endl;
+           << " frag_id=" << datagram.frag_id 
+           << " frame_resolution=" << datagram.frame_width
+           << endl;
     }
 
     // process the received datagram in the decoder
+    const int frame_resolution = datagram.frame_width;
+    Decoder& decoder = *decoder_map[frame_resolution];
     decoder.add_datagram(move(datagram));
 
     // check if the expected frame(s) is complete

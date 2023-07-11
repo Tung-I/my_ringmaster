@@ -243,11 +243,10 @@ void Decoder::consume_next_frame()
   advance_next_frame();
 }
 
+// advance next_frame_ by n
 void Decoder::advance_next_frame(const unsigned int n)
 {
   next_frame_ += n;
-
-  // clean up state up to next_frame_
   clean_up_to(next_frame_);
 }
 

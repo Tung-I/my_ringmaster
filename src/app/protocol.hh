@@ -3,7 +3,7 @@
 
 #include <string>
 #include <memory>
-#include <utility>
+#include <utility> 
 
 enum class FrameType : uint8_t { 
   UNKNOWN = 0, // unknown
@@ -23,13 +23,19 @@ struct Datagram
            const FrameType _frame_type,
            const uint16_t _frag_id,
            const uint16_t _frag_cnt, 
+           const uint16_t _frame_width,
+           const uint16_t _frame_height,
            const std::string_view _payload);
 
   uint32_t frame_id {};    
   FrameType frame_type {}; 
   uint16_t frag_id {};    
-  uint16_t frag_cnt {};    
-  uint64_t send_ts {}; // be passed by video sender 
+  uint16_t frag_cnt {};  
+
+  uint16_t frame_width {};
+  uint16_t frame_height {};  
+  uint64_t send_ts {};
+
   std::string payload {};  
 
   // retransmission-related

@@ -221,7 +221,7 @@ size_t Encoder::packetize_encoded_frame()
             Datagram::max_payload : buf_end - buf_ptr;
 
         // enqueue a datagram
-        send_buf_.emplace_back(frame_id_, frame_type, frag_id, frag_cnt,
+        send_buf_.emplace_back(frame_id_, frame_type, frag_id, frag_cnt, display_width_, display_height_,
           string_view {reinterpret_cast<const char *>(buf_ptr), payload_size});
 
         buf_ptr += payload_size;
