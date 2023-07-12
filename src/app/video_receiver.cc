@@ -27,6 +27,7 @@ void print_usage(const string & program_name)
   "                     2: neither decode nor display frames\n"
   "-o, --output <file>  file to output performance results to\n"
   "-v, --verbose        enable more logging for debugging"
+  "--streamtime         total streaming time in seconds\n"
   << endl;
 }
 
@@ -38,6 +39,7 @@ int main(int argc, char * argv[])
   int lazy_level = 0;
   string output_path;
   bool verbose = false;
+  uint16_t total_stream_time = 0;
 
   const option cmd_line_opts[] = {
     {"fps",     required_argument, nullptr, 'F'},
@@ -45,6 +47,7 @@ int main(int argc, char * argv[])
     {"lazy",    required_argument, nullptr, 'L'},
     {"output",  required_argument, nullptr, 'o'},
     {"verbose", no_argument,       nullptr, 'v'},
+    {"streamtime", required_argument, nullptr, 'T'},
     { nullptr,  0,                 nullptr,  0 },
   };
   
@@ -69,6 +72,9 @@ int main(int argc, char * argv[])
         break;
       case 'v':
         verbose = true;
+        break;
+      case 'T':
+        total_stream_time = narrow_cast<uint16_t>(strict_stoi(optarg));
         break;
       default:
         print_usage(argv[0]);
@@ -156,7 +162,7 @@ int main(int argc, char * argv[])
     }
 
     // break if now()-start_time > 30s
-    if (steady_clock::now() - start_time > seconds(30)) {
+    if (steady_clock::now() - start_time > seconds(total_stream_time)) {
       cerr << "Time's up!" << endl;
       break;
     }

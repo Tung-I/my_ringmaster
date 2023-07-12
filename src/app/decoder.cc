@@ -356,7 +356,8 @@ void Decoder::worker_main()
       display.reset(nullptr);
     }
 
-    {  //q: what does the brcaket here mean? a: lock_guard q: what's the name of this usage in C++? a: 
+    //Any local variables in that block will be destroyed at the end of the block?
+    {  
       // wait until the shared queue is not empty
       unique_lock<mutex> lock(mtx_);
       cv_.wait(lock, [this] { return not shared_queue_.empty(); });
@@ -375,10 +376,11 @@ void Decoder::worker_main()
 
       if (output_fd_) {
         const auto frame_decoded_ts = timestamp_us();
-
         output_fd_->write(to_string(frame.id()) + "," +
                           to_string(frame.frame_size().value()) + "," +
-                          to_string(frame_decoded_ts) + "\n");
+                          to_string(frame_decoded_ts) + "," +
+                          to_string(decode_time_ms) + "\n"
+                          );
       }
 
       if (display) {
@@ -394,7 +396,7 @@ void Decoder::worker_main()
 
       // worker thread also outputs stats roughly every second
       const auto stats_now = steady_clock::now();
-      while (stats_now >= last_stats_time + 1s) {
+      while (stats_now >= last_stats_time + 1s) {  
         if (num_decoded_frames > 0) {
           cerr << "[worker] Avg/Max decoding time (ms) of "
                << num_decoded_frames << " frames: "

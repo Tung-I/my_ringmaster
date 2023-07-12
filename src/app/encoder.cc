@@ -123,11 +123,12 @@ void Encoder::compress_frame(const RawImage & raw_img)
   // output frame information
   if (output_fd_) {
     const auto frame_encoded_ts = timestamp_us();
+    const double encode_time_ms = (frame_encoded_ts - frame_generation_ts) / 1000.0;
 
     output_fd_->write(to_string(frame_id_) + "," +
                       to_string(target_bitrate_) + "," +
                       to_string(frame_size) + "," + 
-                      to_string(frame_encoded_ts - frame_generation_ts) + "," +  //us
+                      to_string(encode_time_ms) + "," + 
                       double_to_string(*ewma_rtt_us_ / 1000.0) + "\n"); // ms
   }
 
