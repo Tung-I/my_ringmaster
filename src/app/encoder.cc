@@ -14,26 +14,27 @@
 using namespace std;
 using namespace chrono;
 
-Encoder::Encoder(const uint16_t display_width,
-                 const uint16_t display_height,
+Encoder::Encoder(const uint16_t default_width,
+                 const uint16_t default_height,
                  const uint16_t frame_rate,
                  const string & output_path)
-  : display_width_(display_width), display_height_(display_height),
+  : default_width_(default_width), default_height_(default_height),
     frame_rate_(frame_rate), output_fd_()
-{
+    {
   // open the output file
   if (not output_path.empty()) {
     output_fd_ = FileDescriptor(check_syscall(
-        open(output_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)));  
+        open(output_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)));
   }
 
   // populate VP9 configuration with default values
   check_call(vpx_codec_enc_config_default(&vpx_codec_vp9_cx_algo, &cfg_, 0),
              VPX_CODEC_OK, "vpx_codec_enc_config_default");
 
+
   // copy the configuration below mostly from WebRTC (libvpx_vp9_encoder.cc)
-  cfg_.g_w = display_width_;
-  cfg_.g_h = display_height_;
+  cfg_.g_w = default_width_;
+  cfg_.g_h = default_height_;
   cfg_.g_timebase.num = 1;
   cfg_.g_timebase.den = frame_rate_; // WebRTC uses a 90 kHz clock
   cfg_.g_pass = VPX_RC_ONE_PASS;
@@ -103,13 +104,21 @@ Encoder::~Encoder()
 
 void Encoder::compress_frame(const RawImage & raw_img)
 {
+
   const auto frame_generation_ts = timestamp_us();
+
+  // if (width, height) != (width_, height_) then reconfigure the encoder
+  if (raw_img.display_width() != default_width_ or raw_img.display_height() != default_height_) {
+    default_width_ = raw_img.display_width();
+    default_height_ = raw_img.display_height();
+    set_resolution(default_width_, default_height_);
+  }
 
   // encode raw_img into frame 'frame_id_'
   encode_frame(raw_img);
 
   // packetize frame 'frame_id_' into datagrams
-  const size_t frame_size = packetize_encoded_frame();
+  const size_t frame_size = packetize_encoded_frame(default_width_, default_height_);
 
   // output frame information
   if (output_fd_) {
@@ -117,10 +126,9 @@ void Encoder::compress_frame(const RawImage & raw_img)
 
     output_fd_->write(to_string(frame_id_) + "," +
                       to_string(target_bitrate_) + "," +
-                      to_string(frame_size) + "," +
-                      to_string(frame_generation_ts) + "," +  //us
-                      to_string(frame_encoded_ts) + ","  +  // us
-                      double_to_string(*ewma_rtt_us_ / 1000.0) + "\n");  // ms
+                      to_string(frame_size) + "," + 
+                      to_string(frame_encoded_ts - frame_generation_ts) + "," +  //us
+                      double_to_string(*ewma_rtt_us_ / 1000.0) + "\n"); // ms
   }
 
   // move onto the next frame
@@ -129,16 +137,15 @@ void Encoder::compress_frame(const RawImage & raw_img)
 
 void Encoder::encode_frame(const RawImage & raw_img)
 {
-  // check if the image dimensions match
-  if (raw_img.display_width() != display_width_ or
-      raw_img.display_height() != display_height_) {
-    throw runtime_error("Encoder: image dimensions don't match");
-  }
+  // if (raw_img.display_width() != display_width_ or
+  //     raw_img.display_height() != display_height_) {
+  //   throw runtime_error("Encoder: image dimensions don't match");
+  // }
 
   // check if a key frame needs to be encoded
   vpx_enc_frame_flags_t encode_flags = 0; // normal frame
-  if (not unacked_.empty()) { // some datagrams are unacked 
-    const auto & first_unacked = unacked_.cbegin()->second; // get the first unacked datagram
+  if (not unacked_.empty()) {
+    const auto & first_unacked = unacked_.cbegin()->second;
 
     // give up if first unacked datagram was initially sent MAX_UNACKED_US ago
     const auto us_since_first_send = timestamp_us() - first_unacked.send_ts;
@@ -168,7 +175,7 @@ void Encoder::encode_frame(const RawImage & raw_img)
                               encode_flags, VPX_DL_REALTIME),
              VPX_CODEC_OK, "failed to encode a frame");
   const auto encode_end = steady_clock::now();
-  const double encode_time_ms = duration<double, milli>( 
+  const double encode_time_ms = duration<double, milli>(
                                 encode_end - encode_start).count();
 
   // track stats in the current period
@@ -177,7 +184,7 @@ void Encoder::encode_frame(const RawImage & raw_img)
   max_encode_time_ms_ = max(max_encode_time_ms_, encode_time_ms);
 }
 
-size_t Encoder::packetize_encoded_frame()
+size_t Encoder::packetize_encoded_frame(uint16_t width, uint16_t height)
 {
   // read the encoded frame's "encoder packets" from 'context_'
   const vpx_codec_cx_pkt_t * encoder_pkt;
@@ -194,7 +201,7 @@ size_t Encoder::packetize_encoded_frame()
         throw runtime_error("Multiple frames were encoded at once");
       }
 
-      frame_size = encoder_pkt->data.frame.sz; 
+      frame_size = encoder_pkt->data.frame.sz;
       assert(frame_size > 0);
 
       // read the returned frame type
@@ -221,7 +228,7 @@ size_t Encoder::packetize_encoded_frame()
             Datagram::max_payload : buf_end - buf_ptr;
 
         // enqueue a datagram
-        send_buf_.emplace_back(frame_id_, frame_type, frag_id, frag_cnt, display_width_, display_height_,
+        send_buf_.emplace_back(frame_id_, frame_type, frag_id, frag_cnt, width, height,
           string_view {reinterpret_cast<const char *>(buf_ptr), payload_size});
 
         buf_ptr += payload_size;
@@ -229,7 +236,7 @@ size_t Encoder::packetize_encoded_frame()
     }
   }
 
-  return frame_size; 
+  return frame_size;
 }
 
 void Encoder::add_unacked(const Datagram & datagram)
@@ -264,19 +271,18 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
   add_rtt_sample(curr_ts - ack->send_ts);
 
   // find the acked datagram in 'unacked_'
-  const auto acked_seq_num = make_pair(ack->frame_id, ack->frag_id); 
-  auto acked_it = unacked_.find(acked_seq_num); 
+  const auto acked_seq_num = make_pair(ack->frame_id, ack->frag_id);
+  auto acked_it = unacked_.find(acked_seq_num);
 
   if (acked_it == unacked_.end()) {
     // do nothing else if ACK is not for an unacked datagram
     return;
   }
-  
+
   // retransmit all unacked datagrams before the acked one (backward)
   for (auto rit = make_reverse_iterator(acked_it);
-       rit != unacked_.rend(); rit++) { 
-    auto & datagram = rit->second; // rit->second is the value, which is a datagram
-                                   // rit->first is the key, which is a pair of frame_id and frag_id
+       rit != unacked_.rend(); rit++) {
+    auto & datagram = rit->second;
 
     // skip if a datagram has been retransmitted MAX_NUM_RTX times
     if (datagram.num_rtx >= MAX_NUM_RTX) {
@@ -298,13 +304,12 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
   unacked_.erase(acked_it);
 }
 
-// add a new RTT sample to 'min_rtt_us_' and 'ewma_rtt_us_'
 void Encoder::add_rtt_sample(const unsigned int rtt_us)
 {
   // min RTT
   if (not min_rtt_us_ or rtt_us < *min_rtt_us_) {
     min_rtt_us_ = rtt_us;
-  } 
+  }
 
   // EWMA RTT
   if (not ewma_rtt_us_) {
@@ -316,7 +321,6 @@ void Encoder::add_rtt_sample(const unsigned int rtt_us)
 
 void Encoder::output_periodic_stats()
 {
-  // output encoding stats every ~1s
   cerr << "Frames encoded in the last ~1s: " << num_encoded_frames_ << endl;
 
   if (num_encoded_frames_ > 0) {
@@ -330,7 +334,7 @@ void Encoder::output_periodic_stats()
          << "/" << double_to_string(*ewma_rtt_us_ / 1000.0) << endl;
   }
 
-  // reset all but RTT-related stats (keep track of the min RTT and EWMA RTT)
+  // reset all but RTT-related stats
   num_encoded_frames_ = 0;
   total_encode_time_ms_ = 0.0;
   max_encode_time_ms_ = 0.0;
@@ -342,5 +346,14 @@ void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)
 
   cfg_.rc_target_bitrate = target_bitrate_;
   check_call(vpx_codec_enc_config_set(&context_, &cfg_),
-             VPX_CODEC_OK, "set_target_bitrate");  
+             VPX_CODEC_OK, "set_target_bitrate");
+}
+
+void Encoder::set_resolution(const uint16_t width,
+                             const uint16_t height)
+{
+  cfg_.g_w = width;
+  cfg_.g_h = height;
+  check_call(vpx_codec_enc_config_set(&context_, &cfg_),
+             VPX_CODEC_OK, "set_resolution");
 }

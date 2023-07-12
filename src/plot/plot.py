@@ -7,7 +7,7 @@ import sys
 import argparse
 
 
-def plot_encoder(filename, save_folder, fps=24):
+def plot_encoding(filename, save_folder, fps=24):
     # Read the data from the txt file (frame_id,target_bitrate,frame_size_in_byte,frame_generatation_timestamp_in_us,frame_encoder_timestamp_in_us,EWMA RTT (ms))
     data = np.loadtxt(filename, delimiter=',')
 

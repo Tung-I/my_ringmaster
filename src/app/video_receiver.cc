@@ -89,41 +89,33 @@ int main(int argc, char * argv[])
  
   // create a UDP socket and "connect" it to the peer (sender)
   Address peer_addr{host, port};
-  cerr << "Peer address: " << peer_addr.str() << endl;
-
   UDPSocket udp_sock;
   udp_sock.connect(peer_addr);
-  cerr << "Local address: " << udp_sock.local_address().str() << endl;
+  cerr << "RTP connected:" << peer_addr.str() << ":" << udp_sock.local_address().str() << endl;
+
+  const auto rtcp_port = narrow_cast<uint16_t>(port + 1);
+  UDPSocket rtcp_sock;
+  Address rtcp_addr{host, rtcp_port};
+  rtcp_sock.connect(rtcp_addr);
+  cerr << "RTCP connected" << rtcp_addr.str() << ":" << rtcp_sock.local_address().str() << endl;
+
 
   // request a specific configuration
   const ConfigMsg init_config_msg(width, height, frame_rate, target_bitrate); 
   udp_sock.send(init_config_msg.serialize_to_string());
+  rtcp_sock.send(init_config_msg.serialize_to_string());
 
   // initialize decoders
-  Decoder decoder_1080p(1080, 1080, lazy_level, output_path);
-  decoder_1080p.set_verbose(verbose);
-  Decoder decoder_720p(720, 720, lazy_level, output_path);
-  decoder_720p.set_verbose(verbose);
-  Decoder decoder_480p(480, 480, lazy_level, output_path);
-  decoder_480p.set_verbose(verbose);
-  Decoder decoder_360p(360, 360, lazy_level, output_path);
-  decoder_360p.set_verbose(verbose);
-  map<int, Decoder*> decoder_map = {
-    {1080, &decoder_1080p},
-    {720, &decoder_720p},
-    {480, &decoder_480p},
-    {360, &decoder_360p}
-  };
+  Decoder decoder(width, height, lazy_level, output_path);
+  decoder.set_verbose(verbose);
 
-  // declare variables for bitrate control
-  // unsigned int cfg_count = 0;
-  // unsigned int cfg_idx = 0;
-  // declare a vector that contains candidates of bitrates
-  // vector<unsigned int> bitrates = {8000, 5000, 2500, 1000};
-  // vector<unsigned int> resolution = {1080, 720, 480, 360};
-  // timers
+ 
+  unsigned int cfg_count = 0;
+  unsigned int cfg_idx = 0;
+  vector<unsigned int> bitrates = {8000, 5000, 2500, 1000};
+  vector<unsigned int> resolution = {1080, 720, 480, 360};
   const auto start_time = steady_clock::now();
-  // auto last_time = steady_clock::now();
+  auto last_time = steady_clock::now();
 
 
   // main loop
@@ -146,8 +138,6 @@ int main(int argc, char * argv[])
     }
 
     // process the received datagram in the decoder
-    const int frame_resolution = datagram.frame_width;
-    Decoder& decoder = *decoder_map[frame_resolution];
     decoder.add_datagram(move(datagram));
 
     // check if the expected frame(s) is complete
@@ -157,16 +147,17 @@ int main(int argc, char * argv[])
     }
 
     // send a new config every 5s
-    // if (steady_clock::now() - last_time > seconds(5)) {
-    //   cfg_idx = cfg_count % bitrates.size();
-    //   cfg_count++; 
-    //   last_time = steady_clock::now();
-    //   ConfigMsg config_msg(resolution[cfg_idx], resolution[cfg_idx], frame_rate, bitrates[cfg_idx]);
-    //   udp_sock.send(config_msg.serialize_to_string());
-    // }
+    if (steady_clock::now() - last_time > seconds(5)) {
+      cfg_idx = cfg_count % bitrates.size();
+      cfg_count++; 
+      last_time = steady_clock::now();
+      ConfigMsg config_msg(resolution[cfg_idx], resolution[cfg_idx], frame_rate, bitrates[cfg_idx]);
+      rtcp_sock.send(config_msg.serialize_to_string());
+    }
 
     // break if now()-start_time > 30s
     if (steady_clock::now() - start_time > seconds(30)) {
+      cerr << "Time's up!" << endl;
       break;
     }
   }

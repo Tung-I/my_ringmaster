@@ -78,7 +78,7 @@ void Frame::insert_frag(Datagram && datagram)
     frame_size_ += datagram.payload.size();
     null_frags_--;
     frags_[datagram.frag_id] = move(datagram);
-  } 
+  }
 }
 
 Decoder::Decoder(const uint16_t display_width,
@@ -108,6 +108,7 @@ Decoder::Decoder(const uint16_t display_width,
     worker_ = thread(&Decoder::worker_main, this);
     cerr << "Spawned a new thread for decoding and displaying frames" << endl;
   }
+
 }
 
 bool Decoder::add_datagram_common(const Datagram & datagram)
@@ -138,7 +139,7 @@ void Decoder::add_datagram(const Datagram & datagram)
   }
 
   // copy the fragment into the frame
-  frame_buf_.at(datagram.frame_id).insert_frag(datagram); 
+  frame_buf_.at(datagram.frame_id).insert_frag(datagram);
 }
 
 void Decoder::add_datagram(Datagram && datagram)
@@ -155,11 +156,9 @@ bool Decoder::next_frame_complete()
 {
   {
     // check if the next frame to expect is complete
-    // (if the frame is in the frame buffer and all of its fragments are received)
+    // if the frame is in the buffer and all of its fragments have been received
     auto it = as_const(frame_buf_).find(next_frame_);
-    // The frame buffer is a map from frame ID to Frame instance.
-    // The Frame instance has a vector of optional<Datagram> for all fragments
-    if (it != frame_buf_.end() and it->second.complete()) { 
+    if (it != frame_buf_.end() and it->second.complete()) {
       return true;
     }
   }
@@ -225,25 +224,24 @@ void Decoder::consume_next_frame()
       shared_queue_.emplace_back(move(frame));
     } // release the lock before notifying the worker thread
 
-    // notify worker thread 
+    // notify worker thread
     cv_.notify_one();
   } else {
-    // main thread outputs frame information if no worker thread
-    if (output_fd_) {
-      const auto frame_decodable_ts = timestamp_us();
+    // // main thread outputs frame information if no worker thread
+    // if (output_fd_) {
+    //   const auto frame_decodable_ts = timestamp_us();
 
-      output_fd_->write(to_string(next_frame_) + "," +
-                        to_string(frame_size) + "," + 
-                        to_string(frame_decodable_ts) + "," + 
-                        to_string(num_decodable_frames_) + "\n");
-    }
+    //   output_fd_->write(to_string(next_frame_) + "," +
+    //                     to_string(frame_size) + "," + 
+    //                     to_string(frame_decodable_ts) + "," + 
+    //                     to_string(num_decodable_frames_) + "\n");
+    // }
   }
 
   // move onto the next frame
   advance_next_frame();
 }
 
-// advance next_frame_ by n
 void Decoder::advance_next_frame(const unsigned int n)
 {
   next_frame_ += n;
@@ -275,7 +273,7 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
   uint8_t * buf_ptr = decode_buf.data();
   const uint8_t * const buf_end = buf_ptr + decode_buf.size();
 
-  for (const auto & datagram : frame.frags()) { 
+  for (const auto & datagram : frame.frags()) {
     const string & payload = datagram.value().payload;
 
     if (buf_ptr + payload.size() >= buf_end) {
@@ -290,7 +288,7 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
 
   // decode the compressed frame in 'decode_buf'
   const auto decode_start = steady_clock::now();
-  check_call(vpx_codec_decode(&context, decode_buf.data(), frame_size, 
+  check_call(vpx_codec_decode(&context, decode_buf.data(), frame_size,
                               nullptr, 1),
              VPX_CODEC_OK, "failed to decode a frame");
   const auto decode_end = steady_clock::now();
@@ -358,7 +356,7 @@ void Decoder::worker_main()
       display.reset(nullptr);
     }
 
-    {
+    {  //q: what does the brcaket here mean? a: lock_guard q: what's the name of this usage in C++? a: 
       // wait until the shared queue is not empty
       unique_lock<mutex> lock(mtx_);
       cv_.wait(lock, [this] { return not shared_queue_.empty(); });
@@ -384,7 +382,7 @@ void Decoder::worker_main()
       }
 
       if (display) {
-        display_decoded_frame(context, *display);
+        display_decoded_frame(context, *display); 
       }
 
       local_queue.pop_front();
@@ -395,7 +393,7 @@ void Decoder::worker_main()
       max_decode_time_ms = max(max_decode_time_ms, decode_time_ms);
 
       // worker thread also outputs stats roughly every second
-      const auto stats_now = steady_clock::now();  
+      const auto stats_now = steady_clock::now();
       while (stats_now >= last_stats_time + 1s) {
         if (num_decoded_frames > 0) {
           cerr << "[worker] Avg/Max decoding time (ms) of "
