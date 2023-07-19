@@ -221,7 +221,7 @@ int main(int argc, char * argv[])
     }
   );
 
-  // when UDP socket is readable
+  // when RTP socket is readable
   poller.register_event(rtp_sock, Poller::In,
     [&]()
     {
@@ -287,14 +287,14 @@ int main(int argc, char * argv[])
 
         // handle the CONFIG message
        if (msg->type == Msg::Type::REMB) {
-          const auto config = dynamic_pointer_cast<ConfigMsg>(msg);
+          const auto REMB = dynamic_pointer_cast<ConfigMsg>(msg);
           
-          cerr << "Received REMB: bitrate=" << config->target_bitrate
+          cerr << "Received REMB: bitrate=" << REMB->target_bitrate
                << endl;
           
           // update the encoder's configuration
     
-          encoder.set_target_bitrate(config->target_bitrate);
+          encoder.set_target_bitrate(REMB->target_bitrate);
           return;
         }
 

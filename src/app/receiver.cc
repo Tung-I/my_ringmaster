@@ -144,7 +144,7 @@ int main(int argc, char * argv[])
       decoder.consume_next_frame();
     }
 
-    // send a new config every 5s
+    // send a new REMB message every 5s
     if (steady_clock::now() - last_time > seconds(5)) {
       event_idx = event_count % bitrates.size();
       event_count++; 

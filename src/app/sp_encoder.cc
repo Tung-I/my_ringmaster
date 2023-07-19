@@ -69,7 +69,7 @@ Encoder::Encoder(const uint16_t default_width,
              VPX_CODEC_OK, "vpx_codec_enc_init");
 
   // this value affects motion estimation and *dominates* the encoding speed
-  codec_control(&context_, VP8E_SET_CPUUSED, cpu_used); // q: where can I find the list of these macros, such as VP8E_SET_CPUUSED? a: 
+  codec_control(&context_, VP8E_SET_CPUUSED, cpu_used);
 
   // enable encoder to skip static/low content blocks
   codec_control(&context_, VP8E_SET_STATIC_THRESHOLD, 1);
@@ -354,7 +354,7 @@ void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)
 {
   // Use codec_control() to update the bitrate
   target_bitrate_ = bitrate_kbps;
-  codec_control(&context_, VP9E_SET_RC_TARGET_BITRATE, target_bitrate_)
+  // codec_control(&context_, VP8E_SET_TARGET_BITRATE, target_bitrate_)
 
 
   // cfg_.rc_target_bitrate = target_bitrate_;
