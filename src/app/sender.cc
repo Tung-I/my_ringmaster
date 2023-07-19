@@ -12,7 +12,7 @@
 #include "poller.hh"
 #include "yuv4mpeg.hh"
 #include "protocol.hh"
-#include "encoder.hh"
+#include "sp_encoder.hh"
 #include "timestamp.hh"
 
 using namespace std;
@@ -102,30 +102,29 @@ int main(int argc, char * argv[])
   const string y4m_path = argv[optind + 1];
 
   // open the UDP socket
-  UDPSocket udp_sock_rtp;
-  udp_sock_rtp.bind({"0", port});
-  cerr << "Local address: " << udp_sock_rtp.local_address().str() << endl;
-  UDPSocket udp_sock_rtcp;
-  udp_sock_rtcp.bind({"0", rtcp_port});
-  cerr << "Local address: " << udp_sock_rtcp.local_address().str() << endl;
+  UDPSocket rtp_sock;
+  rtp_sock.bind({"0", port});
+  cerr << "Local address: " << rtp_sock.local_address().str() << endl;
+  UDPSocket rtcp_sock;
+  rtcp_sock.bind({"0", rtcp_port});
+  cerr << "Local address: " << rtcp_sock.local_address().str() << endl;
 
   // wait for a receiver to send 'ConfigMsg' and "connect" to it
   cerr << "Waiting for receiver..." << endl;
 
-  const auto & [peer_addr, config_msg] = recv_config_msg(udp_sock_rtp); 
+  const auto & [peer_addr, config_msg] = recv_config_msg(rtp_sock); 
   cerr << "RTP address: " << peer_addr.str() << endl;
-  udp_sock_rtp.connect(peer_addr);
+  rtp_sock.connect(peer_addr);
 
-  const auto & [peer_addr_rtcp, config_msg_rtcp] = recv_config_msg(udp_sock_rtcp); 
+  const auto & [peer_addr_rtcp, config_msg_rtcp] = recv_config_msg(rtcp_sock); 
   cerr << "RTCP address: " << peer_addr_rtcp.str() << endl;
-  udp_sock_rtcp.connect(peer_addr_rtcp);
+  rtcp_sock.connect(peer_addr_rtcp);
 
   // read configuration from the peer
   const auto default_width = config_msg.width;
   const auto default_height = config_msg.height;
   const auto default_frame_rate = config_msg.frame_rate;
   const auto default_target_bitrate = config_msg.target_bitrate;
-  uint16_t curr_width = default_width;
 
   cerr << "Received config: width=" << to_string(default_width)
        << " height=" << to_string(default_height)
@@ -133,42 +132,19 @@ int main(int argc, char * argv[])
        << " bitrate=" << to_string(default_target_bitrate) << endl;
 
   // set UDP socket to non-blocking now
-  udp_sock_rtp.set_blocking(false);
-  udp_sock_rtcp.set_blocking(false);
+  rtp_sock.set_blocking(false);
+  rtcp_sock.set_blocking(false);
 
-  // open the video files
-  const string y4m_path_1080p = y4m_path.substr(0, y4m_path.size() - 4) + "_1080p.y4m";
-  YUV4MPEG video_input_1080p(y4m_path_1080p, 1080, 1080);  
-  const string y4m_path_720p = y4m_path.substr(0, y4m_path.size() - 4) + "_720p.y4m";
-  YUV4MPEG video_input_720p(y4m_path_720p, 720, 720); 
-  const string y4m_path_480p = y4m_path.substr(0, y4m_path.size() - 4) + "_480p.y4m";
-  YUV4MPEG video_input_480p(y4m_path_480p, 480, 480); 
-  const string y4m_path_360p = y4m_path.substr(0, y4m_path.size() - 4) + "_360p.y4m";
-  YUV4MPEG video_input_360p(y4m_path_360p, 360, 360); 
-  map<int, YUV4MPEG*> video_input_map = {
-    {1080, &video_input_1080p},
-    {720, &video_input_720p},
-    {480, &video_input_480p},
-    {360, &video_input_360p}
-  };
+  // open the video file
+  YUV4MPEG video_input(y4m_path, default_width, default_height);
 
-  // allocate a raw image for storing the current frame
-  RawImage raw_img_1080p(1080, 1080);
-  RawImage raw_img_720p(720, 720);
-  RawImage raw_img_480p(480, 480);
-  RawImage raw_img_360p(360, 360);
-  map<int, RawImage*> raw_img_map = {
-    {1080, &raw_img_1080p},
-    {720, &raw_img_720p},
-    {480, &raw_img_480p},
-    {360, &raw_img_360p}
-  };
+  // allocate a raw image
+  RawImage raw_img(default_width, default_height);
 
-  // initialize the encoders
-  Encoder encoder (1080, 1080, default_frame_rate, output_path);
-  encoder.set_target_bitrate(8000);
+  // initialize the encoder
+  Encoder encoder(default_width, default_height, default_frame_rate, output_path);
+  encoder.set_target_bitrate(default_target_bitrate);
   encoder.set_verbose(verbose);
- 
 
   Poller poller;
 
@@ -189,33 +165,25 @@ int main(int argc, char * argv[])
 
       for (unsigned int i = 0; i < num_exp; i++) {
         // fetch a raw frame into 'raw_img' from the video input
-        if (not video_input_1080p.read_frame(raw_img_1080p)) {
-          throw runtime_error("Reached the end of video input");
-        }
-        if (not video_input_720p.read_frame(raw_img_720p)) {
-          throw runtime_error("Reached the end of video input");
-        }
-        if (not video_input_480p.read_frame(raw_img_480p)) {
-          throw runtime_error("Reached the end of video input");
-        }
-        if (not video_input_360p.read_frame(raw_img_360p)) {
+        if (not video_input.read_frame(raw_img)) {
           throw runtime_error("Reached the end of video input");
         }
       }
 
-      RawImage & raw_img = *raw_img_map[curr_width];
       // compress 'raw_img' into frame 'frame_id' and packetize it
       encoder.compress_frame(raw_img);
 
       // interested in socket being writable if there are datagrams to send
       if (not encoder.send_buf().empty()) {
-        poller.activate(udp_sock_rtp, Poller::Out);
+        poller.activate(rtp_sock, Poller::Out);
       }
     }
   );
 
+  // read a raw frame when the
+
   // when UDP socket is writable
-  poller.register_event(udp_sock_rtp, Poller::Out,
+  poller.register_event(rtp_sock, Poller::Out,
     [&]()
     {
       deque<Datagram> & send_buf = encoder.send_buf();
@@ -226,7 +194,7 @@ int main(int argc, char * argv[])
         // timestamp the sending time before sending
         datagram.send_ts = timestamp_us();
 
-        if (udp_sock_rtp.send(datagram.serialize_to_string())) {
+        if (rtp_sock.send(datagram.serialize_to_string())) {
           if (verbose) {
             cerr << "Sent datagram: frame_id=" << datagram.frame_id
                  << " frag_id=" << datagram.frag_id
@@ -248,17 +216,17 @@ int main(int argc, char * argv[])
 
       // not interested in socket being writable if no datagrams to send
       if (send_buf.empty()) {
-        poller.deactivate(udp_sock_rtp, Poller::Out);
+        poller.deactivate(rtp_sock, Poller::Out);
       }
     }
   );
 
   // when UDP socket is readable
-  poller.register_event(udp_sock_rtp, Poller::In,
+  poller.register_event(rtp_sock, Poller::In,
     [&]()
     {
       while (true) {
-        const auto & raw_data = udp_sock_rtp.recv();
+        const auto & raw_data = rtp_sock.recv();
 
         if (not raw_data) { // EWOULDBLOCK; try again when data is available
           break;
@@ -282,7 +250,7 @@ int main(int argc, char * argv[])
 
         // send_buf might contain datagrams to be retransmitted now
         if (not encoder.send_buf().empty()) {
-          poller.activate(udp_sock_rtp, Poller::Out);
+          poller.activate(rtp_sock, Poller::Out);
         }
       }
     }
@@ -306,11 +274,11 @@ int main(int argc, char * argv[])
   );
 
   // when RTCP socket is readable
-  poller.register_event(udp_sock_rtcp, Poller::In, 
+  poller.register_event(rtcp_sock, Poller::In, 
     [&]() 
     {
       while (true) {
-        const auto & raw_data = udp_sock_rtcp.recv();
+        const auto & raw_data = rtcp_sock.recv();
         if (not raw_data) { // EWOULDBLOCK; try again when data is available
         cerr << "Unknown message type received on RTCP port." << endl;
           break;
@@ -318,16 +286,14 @@ int main(int argc, char * argv[])
         const shared_ptr<Msg> msg = Msg::parse_from_string(*raw_data);
 
         // handle the CONFIG message
-       if (msg->type == Msg::Type::CONFIG) {
+       if (msg->type == Msg::Type::REMB) {
           const auto config = dynamic_pointer_cast<ConfigMsg>(msg);
           
-          cerr << "Received CONFIG: width=" << config->width
-                << ", height=" << config->height
-                << ", fps=" << config->frame_rate
-                << ", br=" << config->target_bitrate << endl;
+          cerr << "Received REMB: bitrate=" << config->target_bitrate
+               << endl;
           
           // update the encoder's configuration
-          curr_width = config->width;
+    
           encoder.set_target_bitrate(config->target_bitrate);
           return;
         }

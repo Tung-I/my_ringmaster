@@ -105,7 +105,7 @@ Decoder::Decoder(const uint16_t display_width,
 
   // start the worker thread only if we are going to decode or display frames
   if (lazy_level <= DECODE_ONLY) {
-    worker_ = thread(&Decoder::worker_main, this);
+    worker_ = thread(&Decoder::worker_main, this);  // thread(a pointer to member, the object, argument)
     cerr << "Spawned a new thread for decoding and displaying frames" << endl;
   }
 
@@ -307,9 +307,17 @@ void Decoder::display_decoded_frame(vpx_codec_ctx_t & context,
   while ((raw_img = vpx_codec_get_frame(&context, &iter))) {
     frame_decoded++;
 
-    // there should be exactly one frame decoded
+    // there should be exactly one frame decoded  
     if (frame_decoded > 1) {
       throw runtime_error("Multiple frames were decoded at once");
+    }
+
+    // change frame resolution if necessary
+    if (display_width_ != raw_img->d_w or
+        display_height_ != raw_img->d_h) {
+
+
+
     }
 
     // construct a temporary RawImage that does not own the raw_img
@@ -356,11 +364,11 @@ void Decoder::worker_main()
       display.reset(nullptr);
     }
 
-    //Any local variables in that block will be destroyed at the end of the block?
+    //Any local variables in that block will be destroyed at the end of the block
     {  
       // wait until the shared queue is not empty
       unique_lock<mutex> lock(mtx_);
-      cv_.wait(lock, [this] { return not shared_queue_.empty(); });
+      cv_.wait(lock, [this] { return not shared_queue_.empty(); }); // wait until the queue is not empty
 
       // worker owns the lock after wait and should copy shared queue quickly
       while (not shared_queue_.empty()) {

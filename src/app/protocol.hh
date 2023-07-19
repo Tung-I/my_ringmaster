@@ -63,7 +63,8 @@ struct Msg
   enum class Type : uint8_t {
     INVALID = 0, 
     ACK = 1,     
-    CONFIG = 2  
+    CONFIG = 2,
+    REMB = 3  
   };
 
   Type type {Type::INVALID};
@@ -102,6 +103,23 @@ struct ConfigMsg : Msg
   uint16_t width {};         
   uint16_t height {};         
   uint16_t frame_rate {};    
+  uint32_t target_bitrate {}; 
+
+  size_t serialized_size() const override;
+  std::string serialize_to_string() const override;
+};
+
+struct REMBMsg : Msg
+{
+  REMBMsg() : Msg(Type::REMB) {} 
+  REMBMsg(const uint32_t _target_bitrate);  
+
+  // Receiver Reports (RRs): include information about the packet loss, 
+  // interarrival jitter, and a timestamp allowing computation of the round-trip time between the sender and receiver.
+
+  // Sender Reports( SR) include the number of packets and bytes sent, 
+  // and a pair of timestamps facilitating inter-stream synchronization
+ 
   uint32_t target_bitrate {}; 
 
   size_t serialized_size() const override;

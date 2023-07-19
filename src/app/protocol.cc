@@ -151,3 +151,24 @@ string ConfigMsg::serialize_to_string() const
 
   return binary;
 }
+
+
+REMBMsg::REMBMsg(const uint32_t _target_bitrate)
+  : target_bitrate(_target_bitrate)
+{}
+
+size_t REMBMsg::serialized_size() const
+{
+  return Msg::serialized_size() + sizeof(uint32_t);  //
+}
+
+string REMBMsg::serialize_to_string() const
+{
+  string binary;
+  binary.reserve(serialized_size());
+
+  binary += Msg::serialize_to_string();
+  binary += put_number(target_bitrate);
+
+  return binary;
+}
