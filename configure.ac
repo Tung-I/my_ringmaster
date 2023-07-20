@@ -18,7 +18,6 @@ AC_PROG_RANLIB
 # Checks for libraries.
 PKG_CHECK_MODULES([VPX],[vpx])
 PKG_CHECK_MODULES([SDL],[sdl2])
-PKG_CHECK_MODULES([VP9],[vp9])
 
 # Checks for header files.
 

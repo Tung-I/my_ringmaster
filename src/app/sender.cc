@@ -18,12 +18,11 @@
 using namespace std;
 using namespace chrono;
 
-// Define global variables that are only visible to the current source file
+// global variables in an unnamed namespace
 namespace {
   constexpr unsigned int BILLION = 1000 * 1000 * 1000;
 }
 
-// Print usage of the program
 void print_usage(const string & program_name)
 {
   cerr <<
@@ -35,7 +34,6 @@ void print_usage(const string & program_name)
   << endl;
 }
 
-// Receive a 'ConfigMsg' from a receiver
 pair<Address, ConfigMsg> recv_config_msg(UDPSocket & udp_sock)
 {
   // wait until a valid ConfigMsg is received
@@ -44,12 +42,31 @@ pair<Address, ConfigMsg> recv_config_msg(UDPSocket & udp_sock)
 
     const shared_ptr<Msg> msg = Msg::parse_from_string(raw_data.value());
     if (msg == nullptr or msg->type != Msg::Type::CONFIG) {
+      cerr << "Unknown message type received on RTP port." << endl;
       continue; // ignore invalid or non-config messages
     }
 
     const auto config_msg = dynamic_pointer_cast<ConfigMsg>(msg);
     if (config_msg) {
       return {peer_addr, *config_msg};
+    }
+  }
+}
+
+pair<Address, REMBMsg> recv_remb_msg(UDPSocket & udp_sock)
+{
+  while (true) {
+    const auto & [peer_addr, raw_data] = udp_sock.recvfrom();
+
+    const shared_ptr<Msg> remb = Msg::parse_from_string(raw_data.value());
+    if (remb == nullptr or remb->type != Msg::Type::REMB) {
+      cerr << "Unknown message type received on RTCP port." << endl;
+      continue; // ignore invalid or non-config messages
+    }
+
+    const auto remb_msg = dynamic_pointer_cast<REMBMsg>(remb);
+    if (remb_msg) {
+      return {peer_addr, *remb_msg};
     }
   }
 }
@@ -95,13 +112,8 @@ int main(int argc, char * argv[])
   }
 
   const auto port = narrow_cast<uint16_t>(strict_stoi(argv[optind]));
-  // open another port for RTCP
   const auto rtcp_port = narrow_cast<uint16_t>(port + 1);
-
-  // video file path 
   const string y4m_path = argv[optind + 1];
-
-  // open the UDP socket
   UDPSocket rtp_sock;
   rtp_sock.bind({"0", port});
   cerr << "Local address: " << rtp_sock.local_address().str() << endl;
@@ -109,14 +121,12 @@ int main(int argc, char * argv[])
   rtcp_sock.bind({"0", rtcp_port});
   cerr << "Local address: " << rtcp_sock.local_address().str() << endl;
 
-  // wait for a receiver to send 'ConfigMsg' and "connect" to it
+  // Ensure that the receiver is ready to receive the first datagram
   cerr << "Waiting for receiver..." << endl;
-
   const auto & [peer_addr, config_msg] = recv_config_msg(rtp_sock); 
   cerr << "RTP address: " << peer_addr.str() << endl;
   rtp_sock.connect(peer_addr);
-
-  const auto & [peer_addr_rtcp, config_msg_rtcp] = recv_config_msg(rtcp_sock); 
+  const auto & [peer_addr_rtcp, remb_msg] = recv_remb_msg(rtcp_sock); 
   cerr << "RTCP address: " << peer_addr_rtcp.str() << endl;
   rtcp_sock.connect(peer_addr_rtcp);
 
@@ -154,7 +164,7 @@ int main(int argc, char * argv[])
   fps_timer.set_time(frame_interval, frame_interval);
 
   // read a raw frame when the periodic timer fires
-  poller.register_event(fps_timer, Poller::In, 
+  poller.register_event(fps_timer, Poller::In,
     [&]()
     {
       // being lenient: read raw frames 'num_exp' times and use the last one
@@ -180,9 +190,7 @@ int main(int argc, char * argv[])
     }
   );
 
-  // read a raw frame when the
-
-  // when UDP socket is writable
+  // when RTP socket is writable
   poller.register_event(rtp_sock, Poller::Out,
     [&]()
     {
@@ -283,11 +291,11 @@ int main(int argc, char * argv[])
         cerr << "Unknown message type received on RTCP port." << endl;
           break;
         }
-        const shared_ptr<Msg> msg = Msg::parse_from_string(*raw_data);
+        const shared_ptr<Msg> remb = Msg::parse_from_string(*raw_data);
 
         // handle the CONFIG message
-       if (msg->type == Msg::Type::REMB) {
-          const auto REMB = dynamic_pointer_cast<ConfigMsg>(msg);
+       if (remb->type == Msg::Type::REMB) {
+          const auto REMB = dynamic_pointer_cast<REMBMsg>(remb);
           
           cerr << "Received REMB: bitrate=" << REMB->target_bitrate
                << endl;
@@ -304,10 +312,9 @@ int main(int argc, char * argv[])
     }
   );
 
-
   // main loop
   while (true) {
-    poller.poll(-1); 
+    poller.poll(-1);
   }
 
   return EXIT_SUCCESS;

@@ -113,12 +113,6 @@ struct REMBMsg : Msg
 {
   REMBMsg() : Msg(Type::REMB) {} 
   REMBMsg(const uint32_t _target_bitrate);  
-
-  // Receiver Reports (RRs): include information about the packet loss, 
-  // interarrival jitter, and a timestamp allowing computation of the round-trip time between the sender and receiver.
-
-  // Sender Reports( SR) include the number of packets and bytes sent, 
-  // and a pair of timestamps facilitating inter-stream synchronization
  
   uint32_t target_bitrate {}; 
 

@@ -98,6 +98,11 @@ shared_ptr<Msg> Msg::parse_from_string(const string & binary)
     ret->target_bitrate = parser.read_uint32();
     return ret;
   }
+  else if (type == Type::REMB) {
+    auto ret = make_shared<REMBMsg>();
+    ret->target_bitrate = parser.read_uint32();
+    return ret;
+  }
   else {
     return nullptr;
   }
@@ -135,7 +140,7 @@ ConfigMsg::ConfigMsg(const uint16_t _width, const uint16_t _height,
 
 size_t ConfigMsg::serialized_size() const
 {
-  return Msg::serialized_size() + 3 * sizeof(uint16_t) + sizeof(uint32_t);  //
+  return Msg::serialized_size() + 3 * sizeof(uint16_t) + sizeof(uint32_t); 
 }
 
 string ConfigMsg::serialize_to_string() const
@@ -154,12 +159,12 @@ string ConfigMsg::serialize_to_string() const
 
 
 REMBMsg::REMBMsg(const uint32_t _target_bitrate)
-  : target_bitrate(_target_bitrate)
+  : Msg(Type::REMB), target_bitrate(_target_bitrate)
 {}
 
 size_t REMBMsg::serialized_size() const
 {
-  return Msg::serialized_size() + sizeof(uint32_t);  //
+  return Msg::serialized_size() + sizeof(uint32_t); 
 }
 
 string REMBMsg::serialize_to_string() const

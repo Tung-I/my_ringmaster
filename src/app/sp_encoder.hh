@@ -4,7 +4,6 @@
 extern "C" {
 #include <vpx/vpx_encoder.h>
 #include <vpx/vp8cx.h>
-#include <vp9/ratectrl_rtc.h>
 } 
 
 
