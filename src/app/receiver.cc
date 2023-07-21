@@ -10,7 +10,7 @@
 #include "udp_socket.hh"
 #include "sdl.hh"
 #include "protocol.hh"
-#include "sp_decoder.hh"
+#include "video_decoder.hh"
 
 using namespace std;
 using namespace chrono;
@@ -129,7 +129,7 @@ int main(int argc, char * argv[])
   // main loop
   while (true) {
     // parse a datagram received from sender
-    Datagram datagram;
+    VideoDatagram datagram;
     if (not datagram.parse_from_string(rtp_sock.recv().value())) {
       throw runtime_error("failed to parse a datagram");
     }

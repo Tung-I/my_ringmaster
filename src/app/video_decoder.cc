@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <algorithm>
 
-#include "sp_decoder.hh"
+#include "video_decoder.hh"
 #include "exception.hh"
 #include "conversion.hh"
 #include "image.hh"
@@ -28,12 +28,12 @@ bool Frame::has_frag(const uint16_t frag_id) const
   return frags_.at(frag_id).has_value();
 }
 
-Datagram & Frame::get_frag(const uint16_t frag_id)
+VideoDatagram & Frame::get_frag(const uint16_t frag_id)
 {
   return frags_.at(frag_id).value();
 }
 
-const Datagram & Frame::get_frag(const uint16_t frag_id) const
+const VideoDatagram & Frame::get_frag(const uint16_t frag_id) const
 {
   return frags_.at(frag_id).value();
 }
@@ -47,7 +47,7 @@ optional<size_t> Frame::frame_size() const
   return frame_size_;
 }
 
-void Frame::validate_datagram(const Datagram & datagram) const
+void Frame::validate_datagram(const VideoDatagram & datagram) const
 {
   if (datagram.frame_id != id_ or
       datagram.frame_type != type_ or
@@ -57,7 +57,7 @@ void Frame::validate_datagram(const Datagram & datagram) const
   }
 }
 
-void Frame::insert_frag(const Datagram & datagram)
+void Frame::insert_frag(const VideoDatagram & datagram)
 {
   validate_datagram(datagram);
 
@@ -69,7 +69,7 @@ void Frame::insert_frag(const Datagram & datagram)
   }
 }
 
-void Frame::insert_frag(Datagram && datagram)
+void Frame::insert_frag(VideoDatagram && datagram)
 {
   validate_datagram(datagram);
 
@@ -111,7 +111,7 @@ Decoder::Decoder(const uint16_t display_width,
 
 }
 
-bool Decoder::add_datagram_common(const Datagram & datagram)
+bool Decoder::add_datagram_common(const VideoDatagram & datagram)
 {
   const auto frame_id = datagram.frame_id;
   const auto frame_type = datagram.frame_type;
@@ -132,7 +132,7 @@ bool Decoder::add_datagram_common(const Datagram & datagram)
   return true;
 }
 
-void Decoder::add_datagram(const Datagram & datagram)
+void Decoder::add_datagram(const VideoDatagram & datagram)
 {
   if (not add_datagram_common(datagram)) {
     return;
@@ -142,7 +142,7 @@ void Decoder::add_datagram(const Datagram & datagram)
   frame_buf_.at(datagram.frame_id).insert_frag(datagram);
 }
 
-void Decoder::add_datagram(Datagram && datagram)
+void Decoder::add_datagram(VideoDatagram && datagram)
 {
   if (not add_datagram_common(datagram)) {
     return;

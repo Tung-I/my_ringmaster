@@ -31,12 +31,12 @@ public:
   bool has_frag(const uint16_t frag_id) const;
 
   // get fragment 'frag_id'
-  Datagram & get_frag(const uint16_t frag_id);
-  const Datagram & get_frag(const uint16_t frag_id) const;
+  VideoDatagram & get_frag(const uint16_t frag_id);
+  const VideoDatagram & get_frag(const uint16_t frag_id) const;
 
   // insert a fragment into the frame
-  void insert_frag(const Datagram & datagram);
-  void insert_frag(Datagram && datagram);
+  void insert_frag(const VideoDatagram & datagram);
+  void insert_frag(VideoDatagram && datagram);
 
   // if the frame has received all fragments
   bool complete() const { return null_frags_ == 0; }
@@ -46,8 +46,8 @@ public:
   uint32_t id() const { return id_; }
   FrameType type() const { return type_; }
 
-  std::vector<std::optional<Datagram>> & frags() { return frags_; }
-  const std::vector<std::optional<Datagram>> & frags() const { return frags_; }
+  std::vector<std::optional<VideoDatagram>> & frags() { return frags_; }
+  const std::vector<std::optional<VideoDatagram>> & frags() const { return frags_; }
 
   unsigned int null_frags() const { return null_frags_; }
 
@@ -55,12 +55,12 @@ private:
   uint32_t id_;    // frame ID
   FrameType type_; // frame type
 
-  std::vector<std::optional<Datagram>> frags_; // fragments of this frame
+  std::vector<std::optional<VideoDatagram>> frags_; // fragments of this frame
   unsigned int null_frags_; // number of uninitialized fragments
   size_t frame_size_ {0}; // frame size so far
 
   // validate if a datagram belongs to this frame
-  void validate_datagram(const Datagram & datagram) const;
+  void validate_datagram(const VideoDatagram & datagram) const;
 };
 
 class Decoder
@@ -78,8 +78,8 @@ public:
           const std::string & output_path = "");
 
   // add a received datagram
-  void add_datagram(const Datagram & datagram);
-  void add_datagram(Datagram && datagram);
+  void add_datagram(const VideoDatagram & datagram);
+  void add_datagram(VideoDatagram && datagram);
 
   // is next frame complete; might skip to a complete key frame ahead
   bool next_frame_complete();
@@ -133,7 +133,7 @@ private:
   std::thread worker_ {};
 
   // common code between the two versions of add_datagram()
-  bool add_datagram_common(const Datagram & datagram);
+  bool add_datagram_common(const VideoDatagram & datagram);
 
   // advance next frame ID by 'n'
   void advance_next_frame(const unsigned int n = 1);

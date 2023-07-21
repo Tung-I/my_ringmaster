@@ -12,7 +12,7 @@
 #include "poller.hh"
 #include "yuv4mpeg.hh"
 #include "protocol.hh"
-#include "sp_encoder.hh"
+#include "video_encoder.hh"
 #include "timestamp.hh"
 
 using namespace std;
@@ -92,7 +92,7 @@ int main(int argc, char * argv[])
 
     switch (opt) {
       case 'M':
-        Datagram::set_mtu(strict_stoi(optarg));
+        VideoDatagram::set_mtu(strict_stoi(optarg));
         break;
       case 'o':
         output_path = optarg;
@@ -194,7 +194,7 @@ int main(int argc, char * argv[])
   poller.register_event(rtp_sock, Poller::Out,
     [&]()
     {
-      deque<Datagram> & send_buf = encoder.send_buf();
+      deque<VideoDatagram> & send_buf = encoder.send_buf();
 
       while (not send_buf.empty()) {
         auto & datagram = send_buf.front();

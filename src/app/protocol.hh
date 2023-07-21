@@ -17,7 +17,7 @@ enum class FrameType : uint8_t {
 using SeqNum = std::pair<uint32_t, uint16_t>;
 
 // Base Datagram class
-struct BaseDatagram
+struct BaseDatagram 
 {
   BaseDatagram() {}
   BaseDatagram(const uint32_t _frame_id,
@@ -26,29 +26,24 @@ struct BaseDatagram
                const uint16_t _frag_cnt, 
                const std::string_view _payload);
 
+  virtual ~BaseDatagram() {}
+
   uint32_t frame_id {};    
   FrameType frame_type {}; 
   uint16_t frag_id {};    
   uint16_t frag_cnt {};  
+  uint64_t send_ts {};
 
-  std::string payload {};  
+  std::string payload {}; 
 
   // retransmission-related
   unsigned int num_rtx {0};  
   uint64_t last_send_ts {0};  
+  
 
-  // header size after serialization
-  static constexpr size_t HEADER_SIZE = sizeof(uint32_t) +   
-      sizeof(FrameType) + 2 * sizeof(uint16_t) + sizeof(uint64_t);    
-
-  // maximum size for 'payload' (initialized in .cc and modified by set_mtu())
-  static size_t max_payload;
-  static void set_mtu(const size_t mtu);
-
-  // construct this datagram by parsing binary string on wire
-  virtual bool parse_from_string(const std::string & binary);
-  // serialize this datagram to binary string on wire
-  virtual std::string serialize_to_string() const;
+  // serialization and deserialization
+  virtual bool parse_from_string(const std::string & binary) = 0;
+  virtual std::string serialize_to_string() const = 0;
 };
 
 struct VideoDatagram : public BaseDatagram
@@ -64,10 +59,14 @@ struct VideoDatagram : public BaseDatagram
   
   uint16_t frame_width {};
   uint16_t frame_height {};  
+  static const size_t HEADER_SIZE  = sizeof(uint32_t) + 
+    sizeof(FrameType) + 4 * sizeof(uint16_t) + sizeof(uint64_t);
 
-  // construct this datagram by parsing binary string on wire
+  
+  static void set_mtu(const size_t mtu);
+  static size_t max_payload;
+
   bool parse_from_string(const std::string & binary) override;
-  // serialize this datagram to binary string on wire
   std::string serialize_to_string() const override;
 };
 
@@ -80,9 +79,13 @@ struct AudioDatagram : public BaseDatagram
                 const uint16_t _frag_cnt, 
                 const std::string_view _payload);
 
-  // construct this datagram by parsing binary string on wire
+  static constexpr size_t HEADER_SIZE = sizeof(uint32_t) + 
+    sizeof(FrameType) + 2 * sizeof(uint16_t) + sizeof(uint64_t);
+
+  static void set_mtu(const size_t mtu);
+  static size_t max_payload;
+
   bool parse_from_string(const std::string & binary) override;
-  // serialize this datagram to binary string on wire
   std::string serialize_to_string() const override;
 };
 
@@ -115,7 +118,7 @@ struct Msg
 struct AckMsg : Msg
 {
   AckMsg() : Msg(Type::ACK) {}
-  AckMsg(const Datagram & datagram);
+  AckMsg(const BaseDatagram & datagram);
 
   uint32_t frame_id {}; 
   uint16_t frag_id {};  

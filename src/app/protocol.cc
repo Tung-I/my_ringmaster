@@ -4,64 +4,129 @@
 
 using namespace std;
 
-
-#include "protocol.hh"
-
-// Initialize the static member
-size_t BaseDatagram::max_payload = 0;
-
-// BaseDatagram methods
 BaseDatagram::BaseDatagram(const uint32_t _frame_id,
                            const FrameType _frame_type,
                            const uint16_t _frag_id,
                            const uint16_t _frag_cnt,
-                           const std::string_view _payload)
-    : frame_id(_frame_id),
-      frame_type(_frame_type),
-      frag_id(_frag_id),
-      frag_cnt(_frag_cnt),
-      payload(_payload.begin(), _payload.end()) // copy string_view to payload
-{
-}
+                           const string_view _payload)
+  // initialize members
+  : frame_id(_frame_id), frame_type(_frame_type),
+    frag_id(_frag_id), frag_cnt(_frag_cnt), payload(_payload)
+{}
 
-// Inherited virtual methods would be implemented here...
-
-void BaseDatagram::set_mtu(const size_t mtu) {
-  max_payload = mtu - HEADER_SIZE;
-}
-
-
-// VideoDatagram methods
 VideoDatagram::VideoDatagram(const uint32_t _frame_id,
-                             const FrameType _frame_type,
-                             const uint16_t _frag_id,
-                             const uint16_t _frag_cnt, 
-                             const uint16_t _frame_width,
-                             const uint16_t _frame_height,
-                             const std::string_view _payload)
-    : BaseDatagram(_frame_id, _frame_type, _frag_id, _frag_cnt, _payload),
-      frame_width(_frame_width),
-      frame_height(_frame_height)
+                  const FrameType _frame_type,
+                  const uint16_t _frag_id,
+                  const uint16_t _frag_cnt,
+                  const uint16_t _frame_width,
+                  const uint16_t _frame_height,
+                  const string_view _payload)
+  // initialize members
+  : BaseDatagram(_frame_id, _frame_type, _frag_id, _frag_cnt, _payload),
+    frame_width(_frame_width), frame_height(_frame_height)
+{}
+
+size_t VideoDatagram::max_payload = 1500 - 28 - VideoDatagram::HEADER_SIZE; // 28: IP + UDP headers
+
+void VideoDatagram::set_mtu(const size_t mtu)
 {
+  if (mtu > 1500 or mtu < 512) {
+    throw runtime_error("reasonable MTU is between 512 and 1500 bytes");
+  }
+
+  // MTU - (IP + UDP headers) - Datagram header
+  max_payload = mtu - 28 - VideoDatagram::HEADER_SIZE; 
 }
 
-// Implementation of VideoDatagram's own methods...
-// parse_from_string() and serialize_to_string()
+bool VideoDatagram::parse_from_string(const string & binary)
+{
+  if (binary.size() < HEADER_SIZE) {
+    return false; // datagram is too small to contain a header
+  }
+
+  WireParser parser(binary);
+  frame_id = parser.read_uint32();
+  frame_type = static_cast<FrameType>(parser.read_uint8());
+  frag_id = parser.read_uint16();
+  frag_cnt = parser.read_uint16();
+  frame_width = parser.read_uint16();
+  frame_height = parser.read_uint16();
+  send_ts = parser.read_uint64();
+  payload = parser.read_string();
+
+  return true;
+}
+
+string VideoDatagram::serialize_to_string() const
+{
+  string binary;
+  binary.reserve(HEADER_SIZE + payload.size());
+
+  binary += put_number(frame_id);
+  binary += put_number(static_cast<uint8_t>(frame_type));
+  binary += put_number(frag_id);
+  binary += put_number(frag_cnt);
+  binary += put_number(frame_width);
+  binary += put_number(frame_height);
+  binary += put_number(send_ts);
+  binary += payload;
+
+  return binary;
+}
 
 
-// AudioDatagram methods
 AudioDatagram::AudioDatagram(const uint32_t _frame_id,
-                             const FrameType _frame_type,
-                             const uint16_t _frag_id,
-                             const uint16_t _frag_cnt,
-                             const std::string_view _payload)
-    : BaseDatagram(_frame_id, _frame_type, _frag_id, _frag_cnt, _payload)
+                  const FrameType _frame_type,
+                  const uint16_t _frag_id,
+                  const uint16_t _frag_cnt,
+                  const string_view _payload)
+  // initialize members
+  : BaseDatagram(_frame_id, _frame_type, _frag_id, _frag_cnt, _payload)
+{}
+
+size_t AudioDatagram::max_payload = 1500 - 28 - AudioDatagram::HEADER_SIZE;
+
+void AudioDatagram::set_mtu(const size_t mtu)
 {
+  if (mtu > 1500 or mtu < 512) {
+    throw runtime_error("reasonable MTU is between 512 and 1500 bytes");
+  }
+
+  // MTU - (IP + UDP headers) - Datagram header
+  max_payload = mtu - 28 - AudioDatagram::HEADER_SIZE;
 }
 
-// Implementation of AudioDatagram's own methods...
-// parse_from_string() and serialize_to_string()
+bool AudioDatagram::parse_from_string(const string & binary)
+{
+  if (binary.size() < HEADER_SIZE) {
+    return false; // datagram is too small to contain a header
+  }
 
+  WireParser parser(binary);
+  frame_id = parser.read_uint32();
+  frame_type = static_cast<FrameType>(parser.read_uint8());
+  frag_id = parser.read_uint16();
+  frag_cnt = parser.read_uint16();
+  send_ts = parser.read_uint64();
+  payload = parser.read_string();
+
+  return true;
+}
+
+string AudioDatagram::serialize_to_string() const
+{
+  string binary;
+  binary.reserve(HEADER_SIZE + payload.size());
+
+  binary += put_number(frame_id);
+  binary += put_number(static_cast<uint8_t>(frame_type));
+  binary += put_number(frag_id);
+  binary += put_number(frag_cnt);
+  binary += put_number(send_ts);
+  binary += payload;
+
+  return binary;
+}
 
 // Message
 size_t Msg::serialized_size() const
@@ -108,7 +173,7 @@ shared_ptr<Msg> Msg::parse_from_string(const string & binary)
   }
 }
 
-AckMsg::AckMsg(const Datagram & datagram)
+AckMsg::AckMsg(const BaseDatagram & datagram)
   : Msg(Type::ACK), frame_id(datagram.frame_id), frag_id(datagram.frag_id),
     send_ts(datagram.send_ts)
 {}

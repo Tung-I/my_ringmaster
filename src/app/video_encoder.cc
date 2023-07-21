@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <limits>
 
-#include "sp_encoder.hh"
+#include "video_encoder.hh"
 #include "conversion.hh"
 #include "timestamp.hh"
 
@@ -226,7 +226,7 @@ size_t Encoder::packetize_encoded_frame(uint16_t width, uint16_t height)
 
       // total fragments to divide this frame into
       const uint16_t frag_cnt = narrow_cast<uint16_t>(
-          frame_size / (Datagram::max_payload + 1) + 1);
+          frame_size / (VideoDatagram::max_payload + 1) + 1);
 
       // next address to copy compressed frame data from
       uint8_t * buf_ptr = static_cast<uint8_t *>(encoder_pkt->data.frame.buf);
@@ -235,7 +235,7 @@ size_t Encoder::packetize_encoded_frame(uint16_t width, uint16_t height)
       for (uint16_t frag_id = 0; frag_id < frag_cnt; frag_id++) {
         // calculate payload size and construct the payload
         const size_t payload_size = (frag_id < frag_cnt - 1) ?
-            Datagram::max_payload : buf_end - buf_ptr;
+            VideoDatagram::max_payload : buf_end - buf_ptr;
 
         // enqueue a datagram
         send_buf_.emplace_back(frame_id_, frame_type, frag_id, frag_cnt, width, height,
@@ -249,7 +249,7 @@ size_t Encoder::packetize_encoded_frame(uint16_t width, uint16_t height)
   return frame_size;
 }
 
-void Encoder::add_unacked(const Datagram & datagram)
+void Encoder::add_unacked(const VideoDatagram & datagram)
 {
   const auto seq_num = make_pair(datagram.frame_id, datagram.frag_id);
   auto [it, success] = unacked_.emplace(seq_num, datagram);
@@ -261,7 +261,7 @@ void Encoder::add_unacked(const Datagram & datagram)
   it->second.last_send_ts = it->second.send_ts;
 }
 
-void Encoder::add_unacked(Datagram && datagram)
+void Encoder::add_unacked(VideoDatagram && datagram)
 {
   const auto seq_num = make_pair(datagram.frame_id, datagram.frag_id);
   auto [it, success] = unacked_.emplace(seq_num, move(datagram));
