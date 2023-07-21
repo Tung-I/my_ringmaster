@@ -9,32 +9,27 @@ enum class FrameType : uint8_t {
   UNKNOWN = 0, // unknown
   KEY = 1,     // key frame
   NONKEY = 2,  // non-key frame
+  VIDEO = 3,   // video frame
+  AUDIO = 4    // audio frame
 };
 
 // (frame_id, frag_id)
 using SeqNum = std::pair<uint32_t, uint16_t>;
 
-
-// Datagram on wire
-struct Datagram
+// Base Datagram class
+struct BaseDatagram
 {
-  Datagram() {}
-  Datagram(const uint32_t _frame_id,
-           const FrameType _frame_type,
-           const uint16_t _frag_id,
-           const uint16_t _frag_cnt, 
-           const uint16_t _frame_width,
-           const uint16_t _frame_height,
-           const std::string_view _payload);
+  BaseDatagram() {}
+  BaseDatagram(const uint32_t _frame_id,
+               const FrameType _frame_type,
+               const uint16_t _frag_id,
+               const uint16_t _frag_cnt, 
+               const std::string_view _payload);
 
   uint32_t frame_id {};    
   FrameType frame_type {}; 
   uint16_t frag_id {};    
   uint16_t frag_cnt {};  
-
-  uint16_t frame_width {};
-  uint16_t frame_height {};  
-  uint64_t send_ts {};
 
   std::string payload {};  
 
@@ -43,18 +38,54 @@ struct Datagram
   uint64_t last_send_ts {0};  
 
   // header size after serialization
-  static constexpr size_t HEADER_SIZE = sizeof(uint32_t) +   // static: only one copy of HEADER_SIZE is shared by all instances of Datagram
-      sizeof(FrameType) + 2 * sizeof(uint16_t) + sizeof(uint64_t);    // constexpr: HEADER_SIZE is a compile-time constant
+  static constexpr size_t HEADER_SIZE = sizeof(uint32_t) +   
+      sizeof(FrameType) + 2 * sizeof(uint16_t) + sizeof(uint64_t);    
 
   // maximum size for 'payload' (initialized in .cc and modified by set_mtu())
   static size_t max_payload;
   static void set_mtu(const size_t mtu);
 
   // construct this datagram by parsing binary string on wire
-  bool parse_from_string(const std::string & binary);
+  virtual bool parse_from_string(const std::string & binary);
   // serialize this datagram to binary string on wire
-  std::string serialize_to_string() const;
+  virtual std::string serialize_to_string() const;
 };
+
+struct VideoDatagram : public BaseDatagram
+{
+  VideoDatagram() {}
+  VideoDatagram(const uint32_t _frame_id,
+                const FrameType _frame_type,
+                const uint16_t _frag_id,
+                const uint16_t _frag_cnt, 
+                const uint16_t _frame_width,
+                const uint16_t _frame_height,
+                const std::string_view _payload);
+  
+  uint16_t frame_width {};
+  uint16_t frame_height {};  
+
+  // construct this datagram by parsing binary string on wire
+  bool parse_from_string(const std::string & binary) override;
+  // serialize this datagram to binary string on wire
+  std::string serialize_to_string() const override;
+};
+
+struct AudioDatagram : public BaseDatagram
+{
+  AudioDatagram() {}
+  AudioDatagram(const uint32_t _frame_id,
+                const FrameType _frame_type,
+                const uint16_t _frag_id,
+                const uint16_t _frag_cnt, 
+                const std::string_view _payload);
+
+  // construct this datagram by parsing binary string on wire
+  bool parse_from_string(const std::string & binary) override;
+  // serialize this datagram to binary string on wire
+  std::string serialize_to_string() const override;
+};
+
 
 
 // Base class for all messages
