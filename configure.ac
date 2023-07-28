@@ -17,6 +17,7 @@ AC_PROG_RANLIB
 
 # Checks for libraries.
 PKG_CHECK_MODULES([VPX],[vpx])
+PKG_CHECK_MODULES([OPUS],[opus])
 PKG_CHECK_MODULES([SDL],[sdl2])
 
 # Checks for header files.
@@ -31,6 +32,7 @@ AC_CONFIG_FILES([
     src/util/Makefile
     src/video/Makefile
     src/app/Makefile
+    src/audio/Makefile
 ])
 
 AC_OUTPUT

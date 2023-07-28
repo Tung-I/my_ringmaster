@@ -1,22 +1,20 @@
-#ifndef ENCODER_HH
-#define ENCODER_HH
+#ifndef VIDEO_ENCODER_HH
+#define VIDEO_ENCODER_HH
 
 extern "C" {
 #include <vpx/vpx_encoder.h>
 #include <vpx/vp8cx.h>
 } 
 
-
-
 #include <deque>
 #include <map>
 #include <memory>
 #include <optional>
 
-#include "exception.hh"
+#include "exception.hh"    
 #include "image.hh"
 #include "protocol.hh"
-#include "file_descriptor.hh"
+#include "file_descriptor.hh" 
 
 class Encoder
 {
