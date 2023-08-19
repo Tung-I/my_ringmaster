@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <limits>
 
-#include "video_encoder.hh"
+#include "vp9_encoder.hh"
 #include "conversion.hh"
 #include "timestamp.hh"
 

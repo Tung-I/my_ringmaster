@@ -89,16 +89,16 @@ struct AudioDatagram : public BaseDatagram
   std::string serialize_to_string() const override;
 };
 
+/////////////////////////////////////////////////////////////////////
 
-
-// Base class for all messages
+// Base message class
 struct Msg
 {
   enum class Type : uint8_t {
     INVALID = 0, 
     ACK = 1,     
     CONFIG = 2,
-    REMB = 3  
+    SIGNAL = 3  
   };
 
   Type type {Type::INVALID};
@@ -143,10 +143,10 @@ struct ConfigMsg : Msg
   std::string serialize_to_string() const override;
 };
 
-struct REMBMsg : Msg
+struct SignalMsg : Msg
 {
-  REMBMsg() : Msg(Type::REMB) {} 
-  REMBMsg(const uint32_t _target_bitrate);  
+  SignalMsg() : Msg(Type::SIGNAL) {} 
+  SignalMsg(const uint32_t _target_bitrate);  
  
   uint32_t target_bitrate {}; 
 

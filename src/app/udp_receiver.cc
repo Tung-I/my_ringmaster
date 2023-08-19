@@ -10,7 +10,7 @@
 #include "udp_socket.hh"
 #include "sdl.hh"
 #include "protocol.hh"
-#include "decoder.hh"
+#include "vp9_decoder.hh"
 
 using namespace std;
 using namespace chrono;
@@ -39,7 +39,7 @@ int main(int argc, char * argv[])
   int lazy_level = 0;
   string output_path;
   bool verbose = false;
-  uint16_t total_stream_time = 0;
+  uint16_t total_stream_time = 60;
 
   const option cmd_line_opts[] = {
     {"fps",     required_argument, nullptr, 'F'},
@@ -50,7 +50,7 @@ int main(int argc, char * argv[])
     {"streamtime", required_argument, nullptr, 'T'},
     { nullptr,  0,                 nullptr,  0 },
   };
-  
+
   while (true) {
     const int opt = getopt_long(argc, argv, "o:v", cmd_line_opts, nullptr);
     if (opt == -1) {
@@ -91,77 +91,70 @@ int main(int argc, char * argv[])
   const auto port = narrow_cast<uint16_t>(strict_stoi(argv[optind + 1]));
   const auto width = narrow_cast<uint16_t>(strict_stoi(argv[optind + 2]));
   const auto height = narrow_cast<uint16_t>(strict_stoi(argv[optind + 3]));
-  
- 
-  // create a UDP socket and "connect" it to the peer (sender)
-  Address peer_addr{host, port};
-  UDPSocket udp_sock;
-  udp_sock.connect(peer_addr);
-  cerr << "RTP connected:" << peer_addr.str() << ":" << udp_sock.local_address().str() << endl;
 
-  const auto rtcp_port = narrow_cast<uint16_t>(port + 1);
-  UDPSocket rtcp_sock;
-  Address rtcp_addr{host, rtcp_port};
-  rtcp_sock.connect(rtcp_addr);
-  cerr << "RTCP connected" << rtcp_addr.str() << ":" << rtcp_sock.local_address().str() << endl;
+  // create a datagram udp socket and connect to the sender
+  Address peer_addr_video{host, port};
+  UDPSocket video_sock;
+  video_sock.connect(peer_addr_video);
+  cerr << "Video stream connected:" << peer_addr_video.str() << ":" << video_sock.local_address().str() << endl;
 
+  // create a RTCP socket and connect to the sender
+  const auto signal_port = narrow_cast<uint16_t>(port + 1);
+  UDPSocket signal_sock;
+  Address peer_addr_signal{host, signal_port};
+  signal_sock.connect(peer_addr_signal);
+  cerr << "Signal stream connected" << peer_addr_signal.str() << ":" << signal_sock.local_address().str() << endl;
 
-  // request a specific configuration
+  // send INIT messages 
   const ConfigMsg init_config_msg(width, height, frame_rate, target_bitrate); 
-  udp_sock.send(init_config_msg.serialize_to_string());
-  rtcp_sock.send(init_config_msg.serialize_to_string());
+  video_sock.send(init_config_msg.serialize_to_string());
+  cerr <<  "init_config_msg sent" << endl;
 
+  const SignalMsg init_signal_msg(target_bitrate); 
+  signal_sock.send(init_signal_msg.serialize_to_string());
+  cerr <<  "init_signal_msg sent" << endl;
+  
   // initialize decoders
   Decoder decoder(width, height, lazy_level, output_path);
   decoder.set_verbose(verbose);
 
- 
-  unsigned int cfg_count = 0;
-  unsigned int cfg_idx = 0;
-  vector<unsigned int> bitrates = {8000, 5000, 2500, 1000};
-  vector<unsigned int> resolution = {1080, 720, 480, 360};
+  // timer for sending signal messages
   const auto start_time = steady_clock::now();
   auto last_time = steady_clock::now();
-
 
   // main loop
   while (true) {
     // parse a datagram received from sender
-    Datagram datagram;
-    if (not datagram.parse_from_string(udp_sock.recv().value())) {
+    VideoDatagram datagram;
+    if (not datagram.parse_from_string(video_sock.recv().value())) {
       throw runtime_error("failed to parse a datagram");
     }
 
     // send an ACK back to sender
     AckMsg ack(datagram);
-    udp_sock.send(ack.serialize_to_string());
+    video_sock.send(ack.serialize_to_string());
 
     if (verbose) {
       cerr << "Acked datagram: frame_id=" << datagram.frame_id
-           << " frag_id=" << datagram.frag_id 
-           << " frame_resolution=" << datagram.frame_width
-           << endl;
+           << " frag_id=" << datagram.frag_id << endl;
     }
 
     // process the received datagram in the decoder
-    decoder.add_datagram(move(datagram));
+    decoder.add_datagram(move(datagram)); // the parameter is a temporary object, so we need to move() it to avoid copying it. 
 
     // check if the expected frame(s) is complete
     while (decoder.next_frame_complete()) {
-      // depending on the lazy level, might decode and display the next frame
       decoder.consume_next_frame();
     }
 
-    // send a new config every 5s
-    if (steady_clock::now() - last_time > seconds(5)) {
-      cfg_idx = cfg_count % bitrates.size();
-      cfg_count++; 
-      last_time = steady_clock::now();
-      ConfigMsg config_msg(resolution[cfg_idx], resolution[cfg_idx], frame_rate, bitrates[cfg_idx]);
-      rtcp_sock.send(config_msg.serialize_to_string());
+    // send a new signal message every 1s
+    if (steady_clock::now() - last_time > seconds(1)) {
+      // last_time = steady_clock::now();
+      // FeedbackMsg feedback_msg(0);
+      // signal_sock.send(feedback_msg.serialize_to_string());
     }
 
-    // break if now()-start_time > 30s
+    // Streaming time up
     if (steady_clock::now() - start_time > seconds(total_stream_time)) {
       cerr << "Time's up!" << endl;
       break;

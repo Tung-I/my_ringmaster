@@ -74,7 +74,6 @@ string VideoDatagram::serialize_to_string() const
   return binary;
 }
 
-
 AudioDatagram::AudioDatagram(const uint32_t _frame_id,
                   const FrameType _frame_type,
                   const uint16_t _frag_id,
@@ -128,7 +127,8 @@ string AudioDatagram::serialize_to_string() const
   return binary;
 }
 
-// Message
+//////////////////////////////////////////////////////////////////////
+
 size_t Msg::serialized_size() const
 {
   return sizeof(type);
@@ -163,8 +163,8 @@ shared_ptr<Msg> Msg::parse_from_string(const string & binary)
     ret->target_bitrate = parser.read_uint32();
     return ret;
   }
-  else if (type == Type::REMB) {
-    auto ret = make_shared<REMBMsg>();
+  else if (type == Type::SIGNAL) {
+    auto ret = make_shared<SignalMsg>();
     ret->target_bitrate = parser.read_uint32();
     return ret;
   }
@@ -222,17 +222,18 @@ string ConfigMsg::serialize_to_string() const
   return binary;
 }
 
+SignalMsg::SignalMsg(const uint32_t _target_bitrate)
+  : Msg(Type::SIGNAL), target_bitrate(_target_bitrate)
+{
+  
+}
 
-REMBMsg::REMBMsg(const uint32_t _target_bitrate)
-  : Msg(Type::REMB), target_bitrate(_target_bitrate)
-{}
-
-size_t REMBMsg::serialized_size() const
+size_t SignalMsg::serialized_size() const
 {
   return Msg::serialized_size() + sizeof(uint32_t); 
 }
 
-string REMBMsg::serialize_to_string() const
+string SignalMsg::serialize_to_string() const
 {
   string binary;
   binary.reserve(serialized_size());

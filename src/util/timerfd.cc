@@ -21,11 +21,12 @@ void Timerfd::set_time(const timespec & initial_expiration,
 unsigned int Timerfd::read_expirations()
 {
   uint64_t num_exp = 0;
-
+  
   if (check_syscall(::read(fd_num(), &num_exp, sizeof(num_exp)))
       != sizeof(num_exp)) {
     throw runtime_error("read error in timerfd");
   }
-
+  // q: in what situration will num_exp in the fd be greater than 1?
+  // a: when the timerfd is not read for a long time, the timerfd will be expired for many times, and the num_exp will be greater than 1.
   return narrow_cast<unsigned int>(num_exp);
 }
