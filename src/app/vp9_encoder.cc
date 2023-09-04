@@ -99,7 +99,6 @@ Encoder::Encoder(const uint16_t default_width,
   // rctrl_cfg.width = default_width_;
   // rctrl_cfg.height = default_height_;
   // rctrl_cfg.target_bitrate = target_bitrate_
-
   // VP9FrameParamsQpRTC frame_params;
   // std::unique_ptr<VP9RateControlRTC> rc_api = VP9RateControlRTC::Create(rctrl_cfg);
 }
@@ -116,17 +115,10 @@ void Encoder::compress_frame(const RawImage & raw_img)
 
   const auto frame_generation_ts = timestamp_us();
 
-  // if (width, height) != (width_, height_) then reconfigure the encoder
-  if (raw_img.display_width() != default_width_ or raw_img.display_height() != default_height_) {
-    default_width_ = raw_img.display_width();
-    default_height_ = raw_img.display_height();
-    // set_resolution(default_width_, default_height_);
-  }
-
-  // encode raw_img into frame 'frame_id_'
+  // encode raw_img into encoder_pkt buffered in the ctx
   encode_frame(raw_img);
 
-  // packetize frame 'frame_id_' into datagrams
+  // packetize encoder_pkt into datagrams
   const size_t frame_size = packetize_encoded_frame(default_width_, default_height_);
 
   // output frame information
@@ -147,22 +139,22 @@ void Encoder::compress_frame(const RawImage & raw_img)
 
 void Encoder::encode_frame(const RawImage & raw_img)
 {
-  // if (raw_img.display_width() != display_width_ or
-  //     raw_img.display_height() != display_height_) {
-  //   throw runtime_error("Encoder: image dimensions don't match");
-  // }
+  if (raw_img.display_width() != default_width_ or
+      raw_img.display_height() != default_height_) {
+    throw runtime_error("Encoder: image dimensions don't match");
+  }
 
-  // check if a key frame needs to be encoded
-  vpx_enc_frame_flags_t encode_flags = 0; // normal frame
+  // default: normal frame
+  vpx_enc_frame_flags_t encode_flags = 0;
+  
+  // cleaning the pacakge buffer before encoding a new frame
   if (not unacked_.empty()) {
     const auto & first_unacked = unacked_.cbegin()->second;
-
-    // give up if first unacked datagram was initially sent MAX_UNACKED_US ago
     const auto us_since_first_send = timestamp_us() - first_unacked.send_ts;
 
+    // give up if first unacked datagram was initially sent MAX_UNACKED_US ago
     if (us_since_first_send > MAX_UNACKED_US) {
       encode_flags = VPX_EFLAG_FORCE_KF; // force next frame to be key frame
-
       cerr << "* Recovery: gave up retransmissions and forced a key frame "
            << frame_id_ << endl;
 
@@ -196,21 +188,22 @@ void Encoder::encode_frame(const RawImage & raw_img)
 
 size_t Encoder::packetize_encoded_frame(uint16_t width, uint16_t height)
 {
-  // read the encoded frame's "encoder packets" from 'context_'
   const vpx_codec_cx_pkt_t * encoder_pkt;
   vpx_codec_iter_t iter = nullptr;
   unsigned int frames_encoded = 0;
   size_t frame_size = 0;
-
+  
+  // get the compressed frame data
   while ((encoder_pkt = vpx_codec_get_cx_data(&context_, &iter))) {
     if (encoder_pkt->kind == VPX_CODEC_CX_FRAME_PKT) {
-      frames_encoded++;
 
       // there should be exactly one frame encoded
+      frames_encoded++;
       if (frames_encoded > 1) {
         throw runtime_error("Multiple frames were encoded at once");
       }
 
+      // read the returned frame size
       frame_size = encoder_pkt->data.frame.sz;
       assert(frame_size > 0);
 
@@ -218,25 +211,20 @@ size_t Encoder::packetize_encoded_frame(uint16_t width, uint16_t height)
       auto frame_type = FrameType::NONKEY;
       if (encoder_pkt->data.frame.flags & VPX_FRAME_IS_KEY) {
         frame_type = FrameType::KEY;
-
         if (verbose_) {
           cerr << "Encoded a key frame: frame_id=" << frame_id_ << endl;
         }
       }
 
-      // total fragments to divide this frame into
+      // calculate the total fragments to send
       const uint16_t frag_cnt = narrow_cast<uint16_t>(
-          frame_size / (VideoDatagram::max_payload + 1) + 1);
-
-      // next address to copy compressed frame data from
+          frame_size / (FrameDatagram::max_payload + 1) + 1);
       uint8_t * buf_ptr = static_cast<uint8_t *>(encoder_pkt->data.frame.buf);
       const uint8_t * const buf_end = buf_ptr + frame_size;
-
       for (uint16_t frag_id = 0; frag_id < frag_cnt; frag_id++) {
-        // calculate payload size and construct the payload
+        // calculate payload size of the current fragment
         const size_t payload_size = (frag_id < frag_cnt - 1) ?
-            VideoDatagram::max_payload : buf_end - buf_ptr;
-
+            FrameDatagram::max_payload : buf_end - buf_ptr;
         // enqueue a datagram
         send_buf_.emplace_back(frame_id_, frame_type, frag_id, frag_cnt, width, height,
           string_view {reinterpret_cast<const char *>(buf_ptr), payload_size});
@@ -249,7 +237,7 @@ size_t Encoder::packetize_encoded_frame(uint16_t width, uint16_t height)
   return frame_size;
 }
 
-void Encoder::add_unacked(const VideoDatagram & datagram)
+void Encoder::add_unacked(const FrameDatagram & datagram)
 {
   const auto seq_num = make_pair(datagram.frame_id, datagram.frag_id);
   auto [it, success] = unacked_.emplace(seq_num, datagram);
@@ -261,7 +249,7 @@ void Encoder::add_unacked(const VideoDatagram & datagram)
   it->second.last_send_ts = it->second.send_ts;
 }
 
-void Encoder::add_unacked(VideoDatagram && datagram)
+void Encoder::add_unacked(FrameDatagram && datagram)
 {
   const auto seq_num = make_pair(datagram.frame_id, datagram.frag_id);
   auto [it, success] = unacked_.emplace(seq_num, move(datagram));

@@ -92,6 +92,9 @@ int main(int argc, char * argv[])
   const auto width = narrow_cast<uint16_t>(strict_stoi(argv[optind + 2]));
   const auto height = narrow_cast<uint16_t>(strict_stoi(argv[optind + 3]));
 
+  const auto display_width = width / 2;
+  const auto display_height = height / 2;
+
   // create a datagram udp socket and connect to the sender
   Address peer_addr_video{host, port};
   UDPSocket video_sock;
@@ -115,12 +118,17 @@ int main(int argc, char * argv[])
   cerr <<  "init_signal_msg sent" << endl;
   
   // initialize decoders
-  Decoder decoder(width, height, lazy_level, output_path);
+  Decoder decoder(display_width, display_height, lazy_level, output_path);
   decoder.set_verbose(verbose);
 
   // timer for sending signal messages
   const auto start_time = steady_clock::now();
   auto last_time = steady_clock::now();
+
+  unsigned int event_count = 0;
+  unsigned int event_idx = 0;
+  vector<unsigned int> viewpoint_x_list = {2000, 2200, 2400, 2600};
+
 
   // main loop
   while (true) {
@@ -147,11 +155,13 @@ int main(int argc, char * argv[])
       decoder.consume_next_frame();
     }
 
-    // send a new signal message every 1s
-    if (steady_clock::now() - last_time > seconds(1)) {
-      // last_time = steady_clock::now();
-      // FeedbackMsg feedback_msg(0);
-      // signal_sock.send(feedback_msg.serialize_to_string());
+    // send a new signal message every 2s
+    if (steady_clock::now() - last_time > seconds(2)) {
+      event_idx = event_count % viewpoint_x_list.size();
+      event_count++; 
+      last_time = steady_clock::now();
+      SignalMsg signal_msg(viewpoint_x_list[event_idx]);
+      signal_sock.send(signal_msg.serialize_to_string());
     }
 
     // Streaming time up

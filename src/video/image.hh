@@ -6,6 +6,8 @@ extern "C" {
 }
 
 #include <string_view>
+#include <vector>
+#include <cmath>
 
 // wrapper class for vpx_image of format I420
 class RawImage
@@ -49,7 +51,7 @@ public:
   void copy_u_from(const std::string_view src);
   void copy_v_from(const std::string_view src);
 
-  // forbid copy and move operators
+  // forbid copy and move operators  
   RawImage(const RawImage & other) = delete;
   const RawImage & operator=(const RawImage & other) = delete;
   RawImage(RawImage && other) = delete;
@@ -65,6 +67,45 @@ private:
   // image display dimensions
   uint16_t display_width_;
   uint16_t display_height_;
+};
+
+
+class TiledImage
+{
+public:
+    TiledImage(uint16_t frame_width, uint16_t frame_height, uint16_t n_row, uint16_t n_col);
+    ~TiledImage();
+    void partition();
+    void merge();
+    void threaded_partition_tile(uint16_t row, uint16_t col);
+    void threaded_merge_tile(uint16_t row, uint16_t col);
+    RawImage & get_frame() { return frame_img; }
+
+private:
+    RawImage frame_img;
+    uint16_t n_row_;
+    uint16_t n_col_;
+    uint16_t frame_width_;
+    uint16_t frame_height_;
+    uint16_t tile_width_;
+    uint16_t tile_height_;
+    std::vector<RawImage*> tiles;
+};
+
+
+class CroppedImage {
+public:
+  CroppedImage(uint16_t frame_width, uint16_t frame_height, uint16_t crop_width, uint16_t crop_height);
+  void crop(float viewpoint_x, float viewpoint_y, uint16_t  width, uint16_t  height);
+  RawImage & get_frame() { return frame_img; }
+  RawImage & get_cropped_frame() { return cropped_img; }
+
+    // ... other member functions and constructors
+private:
+  uint16_t frame_width_;
+  uint16_t frame_height_;
+  RawImage frame_img;
+  RawImage cropped_img;
 };
 
 #endif /* IMAGE_HH */

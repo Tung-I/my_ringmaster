@@ -30,8 +30,8 @@ public:
   void compress_frame(const RawImage & raw_img);
 
   // add a transmitted but unacked datagram (except retransmissions) to unacked
-  void add_unacked(const VideoDatagram & datagram);
-  void add_unacked(VideoDatagram && datagram);
+  void add_unacked(const FrameDatagram & datagram);
+  void add_unacked(FrameDatagram && datagram);
 
   // handle ACK
   void handle_ack(const std::shared_ptr<AckMsg> & ack);
@@ -41,8 +41,8 @@ public:
 
   // accessors
   uint32_t frame_id() const { return frame_id_; }
-  std::deque<VideoDatagram> & send_buf() { return send_buf_; }
-  std::map<SeqNum, VideoDatagram> & unacked() { return unacked_; }
+  std::deque<FrameDatagram> & send_buf() { return send_buf_; }
+  std::map<SeqNum, FrameDatagram> & unacked() { return unacked_; }
 
   // mutators
   void set_verbose(const bool verbose) { verbose_ = verbose; }
@@ -74,10 +74,10 @@ private:
   uint32_t frame_id_ {0};
 
   // queue of datagrams (packetized video frames) to send
-  std::deque<VideoDatagram> send_buf_ {};
+  std::deque<FrameDatagram> send_buf_ {};
 
   // unacked datagrams
-  std::map<SeqNum, VideoDatagram> unacked_ {};
+  std::map<SeqNum, FrameDatagram> unacked_ {};
 
   // RTT-related
   std::optional<unsigned int> min_rtt_us_ {};

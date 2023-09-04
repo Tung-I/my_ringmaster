@@ -9,8 +9,6 @@ enum class FrameType : uint8_t {
   UNKNOWN = 0, // unknown
   KEY = 1,     // key frame
   NONKEY = 2,  // non-key frame
-  VIDEO = 3,   // video frame
-  AUDIO = 4    // audio frame
 };
 
 // (frame_id, frag_id)
@@ -46,10 +44,10 @@ struct BaseDatagram
   virtual std::string serialize_to_string() const = 0;
 };
 
-struct VideoDatagram : public BaseDatagram
+struct FrameDatagram : public BaseDatagram
 {
-  VideoDatagram() {}
-  VideoDatagram(const uint32_t _frame_id,
+  FrameDatagram() {}
+  FrameDatagram(const uint32_t _frame_id,
                 const FrameType _frame_type,
                 const uint16_t _frag_id,
                 const uint16_t _frag_cnt, 
@@ -70,18 +68,25 @@ struct VideoDatagram : public BaseDatagram
   std::string serialize_to_string() const override;
 };
 
-struct AudioDatagram : public BaseDatagram
+struct TileDatagram : public BaseDatagram
 {
-  AudioDatagram() {}
-  AudioDatagram(const uint32_t _frame_id,
+  TileDatagram() {}
+  TileDatagram(const uint32_t _frame_id,
                 const FrameType _frame_type,
+                const uint16_t _tile_id,
                 const uint16_t _frag_id,
                 const uint16_t _frag_cnt, 
+                const uint16_t _frame_width,
+                const uint16_t _frame_height,
                 const std::string_view _payload);
+  
+  uint16_t tile_id {};
+  uint16_t frame_width {};
+  uint16_t frame_height {};  
+  static const size_t HEADER_SIZE  = sizeof(uint32_t) + 
+    sizeof(FrameType) + 5 * sizeof(uint16_t) + sizeof(uint64_t);
 
-  static constexpr size_t HEADER_SIZE = sizeof(uint32_t) + 
-    sizeof(FrameType) + 2 * sizeof(uint16_t) + sizeof(uint64_t);
-
+  
   static void set_mtu(const size_t mtu);
   static size_t max_payload;
 

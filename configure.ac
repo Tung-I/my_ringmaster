@@ -14,10 +14,10 @@ AC_SUBST([PICKY_CXXFLAGS])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_RANLIB
+AC_PROG_CC
 
 # Checks for libraries.
 PKG_CHECK_MODULES([VPX],[vpx])
-PKG_CHECK_MODULES([OPUS],[opus])
 PKG_CHECK_MODULES([SDL],[sdl2])
 
 # Checks for header files.

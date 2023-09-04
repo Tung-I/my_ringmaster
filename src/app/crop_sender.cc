@@ -145,10 +145,14 @@ int main(int argc, char * argv[])
   YUV4MPEG video_input(y4m_path, init_width, init_height);
 
   // allocate a raw image
-  RawImage raw_img(init_width, init_height);
+  float viewpoint_x = 2048.0;
+  float viewpoint_y = viewpoint_x / 2;
+  const auto crop_width = init_width / 2;
+  const auto crop_height = init_height / 2;
+  CroppedImage crop_img(init_width, init_height, crop_width, crop_height);
 
   // initialize the encoder
-  Encoder encoder(init_width, init_height, init_frame_rate, output_path);
+  Encoder encoder(crop_width, crop_height, init_frame_rate, output_path);
   encoder.set_target_bitrate(init_target_bitrate);
   encoder.set_verbose(verbose);
 
@@ -170,13 +174,16 @@ int main(int argc, char * argv[])
 
       for (unsigned int i = 0; i < num_exp; i++) {
         // fetch a raw frame into 'raw_img' from the video input
-        if (not video_input.read_frame(raw_img)) {
+        if (not video_input.read_frame(crop_img.get_frame())) {
           throw runtime_error("Reached the end of video input");
         }
       }
 
+      // debug
+      crop_img.crop(viewpoint_x, viewpoint_y, 2048, 1024);
+
       // compress 'raw_img' into frame 'frame_id' and packetize it
-      encoder.compress_frame(raw_img);
+      encoder.compress_frame(crop_img.get_cropped_frame());
 
       // interested in socket being writable if there are datagrams to send
       if (not encoder.send_buf().empty()) {
@@ -289,13 +296,8 @@ int main(int argc, char * argv[])
         // handle the signal message
        if (sig_msg->type == Msg::Type::SIGNAL) {
           const auto signal = dynamic_pointer_cast<SignalMsg>(sig_msg);
-          
-          cerr << "Received signal: bitrate=" << signal->target_bitrate
-               << endl;
-          
-          // update the encoder's configuration
-    
-          encoder.set_target_bitrate(signal->target_bitrate);
+          viewpoint_x = signal->target_bitrate;
+          viewpoint_y = viewpoint_x / 2;
         }
         // ignore invalid messages
         return;

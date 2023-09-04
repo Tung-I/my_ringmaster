@@ -145,7 +145,7 @@ int main(int argc, char * argv[])
   YUV4MPEG video_input(y4m_path, init_width, init_height);
 
   // allocate a raw image
-  RawImage raw_img(init_width, init_height);
+  TiledImage tiled_img(init_width, init_height, 2, 4);
 
   // initialize the encoder
   Encoder encoder(init_width, init_height, init_frame_rate, output_path);
@@ -170,13 +170,23 @@ int main(int argc, char * argv[])
 
       for (unsigned int i = 0; i < num_exp; i++) {
         // fetch a raw frame into 'raw_img' from the video input
-        if (not video_input.read_frame(raw_img)) {
+        if (not video_input.read_frame(tiled_img.get_frame())) {
           throw runtime_error("Reached the end of video input");
         }
       }
 
+      //debug
+      auto ts_before_partition = timestamp_us();
+      tiled_img.partition(); // ~13ms w/o multi-threading; 3ms w/ multi-threading
+      auto ts_after_partition =timestamp_us();
+      cerr << "Partition time: " << ts_after_partition - ts_before_partition << endl;
+      auto ts_before_merge =timestamp_us();
+      tiled_img.merge(); // ~12ms w/o multi-threading; 2.8ms w/ multi-threading
+      auto ts_after_merge =timestamp_us();
+      cerr << "Merge time: " << ts_after_merge - ts_before_merge << endl;
+
       // compress 'raw_img' into frame 'frame_id' and packetize it
-      encoder.compress_frame(raw_img);
+      encoder.compress_frame(tiled_img.get_frame());
 
       // interested in socket being writable if there are datagrams to send
       if (not encoder.send_buf().empty()) {

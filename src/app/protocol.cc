@@ -14,7 +14,70 @@ BaseDatagram::BaseDatagram(const uint32_t _frame_id,
     frag_id(_frag_id), frag_cnt(_frag_cnt), payload(_payload)
 {}
 
-VideoDatagram::VideoDatagram(const uint32_t _frame_id,
+
+TileDatagram::TileDatagram(const uint32_t _frame_id,
+                  const FrameType _frame_type,
+                  const uint16_t _tile_id,
+                  const uint16_t _frag_id,
+                  const uint16_t _frag_cnt,
+                  const uint16_t _frame_width,
+                  const uint16_t _frame_height,
+                  const string_view _payload)
+  // initialize members
+  : BaseDatagram(_frame_id, _frame_type, _frag_id, _frag_cnt, _payload),
+    tile_id(_tile_id), frame_width(_frame_width), frame_height(_frame_height)
+{}
+
+size_t TileDatagram::max_payload = 1500 - 28 - TileDatagram::HEADER_SIZE; // 28: IP + UDP headers
+
+void TileDatagram::set_mtu(const size_t mtu)
+{
+  if (mtu > 1500 or mtu < 512) {
+    throw runtime_error("reasonable MTU is between 512 and 1500 bytes");
+  }
+  max_payload = mtu - 28 - TileDatagram::HEADER_SIZE; // MTU - (IP + UDP headers) - Datagram header
+}
+
+bool TileDatagram::parse_from_string(const string & binary)
+{
+  if (binary.size() < HEADER_SIZE) {
+    return false; // datagram is too small to contain a header
+  }
+
+  WireParser parser(binary);
+  frame_id = parser.read_uint32();
+  frame_type = static_cast<FrameType>(parser.read_uint8());
+  tile_id = parser.read_uint16();
+  frag_id = parser.read_uint16();
+  frag_cnt = parser.read_uint16();
+  frame_width = parser.read_uint16();
+  frame_height = parser.read_uint16();
+  send_ts = parser.read_uint64();
+  payload = parser.read_string();
+
+  return true;
+}
+
+string TileDatagram::serialize_to_string() const
+{
+  string binary;
+  binary.reserve(HEADER_SIZE + payload.size());
+
+  binary += put_number(frame_id);
+  binary += put_number(static_cast<uint8_t>(frame_type));
+  binary += put_number(tile_id);
+  binary += put_number(frag_id);
+  binary += put_number(frag_cnt);
+  binary += put_number(frame_width);
+  binary += put_number(frame_height);
+  binary += put_number(send_ts);
+  binary += payload;
+
+  return binary;
+}
+
+
+FrameDatagram::FrameDatagram(const uint32_t _frame_id,
                   const FrameType _frame_type,
                   const uint16_t _frag_id,
                   const uint16_t _frag_cnt,
@@ -26,19 +89,17 @@ VideoDatagram::VideoDatagram(const uint32_t _frame_id,
     frame_width(_frame_width), frame_height(_frame_height)
 {}
 
-size_t VideoDatagram::max_payload = 1500 - 28 - VideoDatagram::HEADER_SIZE; // 28: IP + UDP headers
+size_t FrameDatagram::max_payload = 1500 - 28 - FrameDatagram::HEADER_SIZE; // 28: IP + UDP headers
 
-void VideoDatagram::set_mtu(const size_t mtu)
+void FrameDatagram::set_mtu(const size_t mtu)
 {
   if (mtu > 1500 or mtu < 512) {
     throw runtime_error("reasonable MTU is between 512 and 1500 bytes");
   }
-
-  // MTU - (IP + UDP headers) - Datagram header
-  max_payload = mtu - 28 - VideoDatagram::HEADER_SIZE; 
+  max_payload = mtu - 28 - FrameDatagram::HEADER_SIZE; // MTU - (IP + UDP headers) - Datagram header
 }
 
-bool VideoDatagram::parse_from_string(const string & binary)
+bool FrameDatagram::parse_from_string(const string & binary)
 {
   if (binary.size() < HEADER_SIZE) {
     return false; // datagram is too small to contain a header
@@ -57,7 +118,7 @@ bool VideoDatagram::parse_from_string(const string & binary)
   return true;
 }
 
-string VideoDatagram::serialize_to_string() const
+string FrameDatagram::serialize_to_string() const
 {
   string binary;
   binary.reserve(HEADER_SIZE + payload.size());
@@ -74,58 +135,6 @@ string VideoDatagram::serialize_to_string() const
   return binary;
 }
 
-AudioDatagram::AudioDatagram(const uint32_t _frame_id,
-                  const FrameType _frame_type,
-                  const uint16_t _frag_id,
-                  const uint16_t _frag_cnt,
-                  const string_view _payload)
-  // initialize members
-  : BaseDatagram(_frame_id, _frame_type, _frag_id, _frag_cnt, _payload)
-{}
-
-size_t AudioDatagram::max_payload = 1500 - 28 - AudioDatagram::HEADER_SIZE;
-
-void AudioDatagram::set_mtu(const size_t mtu)
-{
-  if (mtu > 1500 or mtu < 512) {
-    throw runtime_error("reasonable MTU is between 512 and 1500 bytes");
-  }
-
-  // MTU - (IP + UDP headers) - Datagram header
-  max_payload = mtu - 28 - AudioDatagram::HEADER_SIZE;
-}
-
-bool AudioDatagram::parse_from_string(const string & binary)
-{
-  if (binary.size() < HEADER_SIZE) {
-    return false; // datagram is too small to contain a header
-  }
-
-  WireParser parser(binary);
-  frame_id = parser.read_uint32();
-  frame_type = static_cast<FrameType>(parser.read_uint8());
-  frag_id = parser.read_uint16();
-  frag_cnt = parser.read_uint16();
-  send_ts = parser.read_uint64();
-  payload = parser.read_string();
-
-  return true;
-}
-
-string AudioDatagram::serialize_to_string() const
-{
-  string binary;
-  binary.reserve(HEADER_SIZE + payload.size());
-
-  binary += put_number(frame_id);
-  binary += put_number(static_cast<uint8_t>(frame_type));
-  binary += put_number(frag_id);
-  binary += put_number(frag_cnt);
-  binary += put_number(send_ts);
-  binary += payload;
-
-  return binary;
-}
 
 //////////////////////////////////////////////////////////////////////
 
