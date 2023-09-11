@@ -41,6 +41,8 @@ int main(int argc, char * argv[])
   string output_path;
   bool verbose = false;
   uint16_t total_stream_time = 60;
+  uint16_t n_row = 4;
+  uint16_t n_col = 4;
 
   const option cmd_line_opts[] = {
     {"fps",     required_argument, nullptr, 'F'},
@@ -92,6 +94,8 @@ int main(int argc, char * argv[])
   const auto port = narrow_cast<uint16_t>(strict_stoi(argv[optind + 1]));
   const auto width = narrow_cast<uint16_t>(strict_stoi(argv[optind + 2]));
   const auto height = narrow_cast<uint16_t>(strict_stoi(argv[optind + 3]));
+  const uint16_t tile_width = width / n_col;
+  const uint16_t tile_height = height / n_row;
 
   // create a datagram udp socket and connect to the sender
   Address peer_addr_video{host, port};
@@ -116,7 +120,7 @@ int main(int argc, char * argv[])
   cerr <<  "init_signal_msg sent" << endl;
   
   // initialize decoders
-  Decoder decoder(width, height, lazy_level, output_path);
+  Decoder decoder(tile_width, tile_height, lazy_level, output_path);
   decoder.set_verbose(verbose);
 
   // timer for sending signal messages
@@ -130,23 +134,10 @@ int main(int argc, char * argv[])
 
     // debug
     
-    // if (not datagram.parse_from_string(video_sock.recv().value())) {
-    //   throw runtime_error("failed to parse a datagram");
-    // }
-
-    auto ts_before_recv = timestamp_us();
-
-    string datagram_str = video_sock.recv().value();
-
-    auto ts_after_recv = timestamp_us();
-    cerr << "Parsing time: " << ts_after_recv- ts_before_recv << endl;
-
-    if (not datagram.parse_from_string(datagram_str)) {
+    if (not datagram.parse_from_string(video_sock.recv().value())) {
       throw runtime_error("failed to parse a datagram");
     }
-
   
-
     // send an ACK back to sender
     AckMsg ack(datagram);
     video_sock.send(ack.serialize_to_string());

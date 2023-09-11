@@ -80,6 +80,7 @@ public:
     void threaded_partition_tile(uint16_t row, uint16_t col);
     void threaded_merge_tile(uint16_t row, uint16_t col);
     RawImage & get_frame() { return frame_img; }
+    RawImage & get_tile(uint16_t row, uint16_t col) { return *tiles[row * n_col_ + col]; }
 
 private:
     RawImage frame_img;

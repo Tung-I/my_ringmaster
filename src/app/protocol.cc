@@ -208,6 +208,7 @@ string AckMsg::serialize_to_string() const
   return binary;
 }
 
+// config message for udp sender
 ConfigMsg::ConfigMsg(const uint16_t _width, const uint16_t _height,
                      const uint16_t _frame_rate, const uint32_t _target_bitrate)
   : Msg(Type::CONFIG), width(_width), height(_height),
@@ -233,6 +234,7 @@ string ConfigMsg::serialize_to_string() const
   return binary;
 }
 
+// message for control signal
 SignalMsg::SignalMsg(const uint32_t _target_bitrate)
   : Msg(Type::SIGNAL), target_bitrate(_target_bitrate)
 {

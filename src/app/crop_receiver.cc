@@ -128,7 +128,8 @@ int main(int argc, char * argv[])
   unsigned int event_count = 0;
   unsigned int event_idx = 0;
   // vector<unsigned int> viewpoint_x_list = {2000, 2200, 2400, 2600};
-  vector<unsigned int> viewpoint_x_list = {4000, 4200, 4400, 4600};
+  // vector<unsigned int> viewpoint_x_list = {4000, 4200, 4400, 4600};
+  vector<unsigned int> viewpoint_x_list = {400, 450, 500, 550};
 
 
   // main loop

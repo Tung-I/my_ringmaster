@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <utility>
 #include <chrono>
+#include <thread>
 
 #include "conversion.hh"
 #include "timerfd.hh"
@@ -31,6 +32,9 @@ void print_usage(const string & program_name)
   "--mtu <MTU>                MTU for deciding UDP payload size\n"
   "-o, --output <file>        file to output performance results to\n"
   "-v, --verbose              enable more logging for debugging"
+  "--buffer <size>       size of the raw image buffer in frames\n"
+  "--row <size>          number of rows of tiling\n"
+  "--col <size>          number of columns of tiling\n"
   << endl;
 }
 
@@ -72,12 +76,17 @@ int main(int argc, char * argv[])
   // argument parsing
   string output_path;
   bool verbose = false;
+  int raw_img_buffer_size = 240;
+  uint16_t n_row = 4;
+  uint16_t n_col = 4;
+
 
   const option cmd_line_opts[] = {
     {"mtu",     required_argument, nullptr, 'M'},
     {"output",  required_argument, nullptr, 'o'},
     {"verbose", no_argument,       nullptr, 'v'},
-    { nullptr,  0,                 nullptr,  0 },
+    {"buffer",  required_argument, nullptr, 'B'},
+    { nullptr,  0,                 nullptr,  0 }
   };
 
   while (true) {
@@ -95,6 +104,9 @@ int main(int argc, char * argv[])
         break;
       case 'v':
         verbose = true;
+        break;
+      case 'B':
+        raw_img_buffer_size = strict_stoi(optarg);
         break;
       default:
         print_usage(argv[0]);
@@ -127,29 +139,35 @@ int main(int argc, char * argv[])
   signal_sock.connect(peer_addr_signal);
 
   // read configuration from the peer
-  const auto init_width = init_config_msg.width;
-  const auto init_height = init_config_msg.height;
+  const auto frame_width = init_config_msg.width;
+  const auto frame_height = init_config_msg.height;
   const auto init_frame_rate = init_config_msg.frame_rate;
   const auto init_target_bitrate = init_config_msg.target_bitrate;
+  const auto tile_width = frame_width / n_col;
+  const auto tile_height = frame_height / n_row;
 
-  cerr << "Received config: width=" << to_string(init_width)
-       << " height=" << to_string(init_height)
+  cerr << "Received config: width=" << to_string(frame_width)
+       << " height=" << to_string(frame_height)
        << " FPS=" << to_string(init_frame_rate)
-       << " bitrate=" << to_string(init_target_bitrate) << endl;
+       << " bitrate=" << to_string(init_target_bitrate) 
+       << " n_row=" << to_string(n_row)
+       << " n_col=" << to_string(n_col)
+       << " tile_width=" << to_string(tile_width)
+       << " tile_height=" << to_string(tile_height)
+       << endl;
 
   // set UDP socket to non-blocking now
   video_sock.set_blocking(false);
   signal_sock.set_blocking(false);
 
   // open the video file
-  YUV4MPEG video_input(y4m_path, init_width, init_height);
+  YUV4MPEG video_input(y4m_path, frame_width, frame_height);
 
-  // initialize the raw image buffer implemented 
-  const int raw_img_buffer_size = 300;
+  // initialize the raw image buffer
   vector<TiledImage*> raw_img_buffer;
   raw_img_buffer.resize(raw_img_buffer_size);
   for (int i = 0; i < raw_img_buffer_size; i++) {
-    raw_img_buffer[i] = new TiledImage(init_width, init_height, 4, 8);
+    raw_img_buffer[i] = new TiledImage(frame_width, frame_height, n_row, n_col);
   }
   // read the raw video frames into the buffer
   for (int i = 0; i < raw_img_buffer_size; i++) {
@@ -160,19 +178,30 @@ int main(int argc, char * argv[])
       cerr << "Raw frame buffer filled: " << i + 1 << " frames" << endl;
     }
   }
-  int event_idx = 0;  // index of the next raw frame to be sent
+  int frame_idx = 0;  // index of the next raw frame to be sent
 
 
   // initialize the encoder
-  Encoder encoder(init_width, init_height, init_frame_rate, output_path);
-  encoder.set_target_bitrate(init_target_bitrate);
-  encoder.set_verbose(verbose);
+  // Encoder encoder(tile_width, tile_height, init_frame_rate, output_path);
+  // encoder.set_target_bitrate(init_target_bitrate);
+  // encoder.set_verbose(verbose);
+
+  vector<Encoder*> encoders;
+  encoders.resize(n_row * n_col);
+  for (int i = 0; i < n_row * n_col; i++) {
+    encoders[i] = new Encoder(tile_width, tile_height, init_frame_rate, output_path);
+    encoders[i]->set_target_bitrate(init_target_bitrate);
+    encoders[i]->set_verbose(verbose);
+  }
 
   // create a periodic timer with the same period as the frame interval
   Poller poller;
   Timerfd fps_timer;
   const timespec frame_interval {0, static_cast<long>(BILLION / init_frame_rate)}; // {sec, nsec}
   fps_timer.set_time(frame_interval, frame_interval); // {initial expiration, interval}
+
+  // threads
+  vector<thread> threads;
 
   // read a raw frame when the periodic timer fires
   poller.register_event(fps_timer, Poller::In,
@@ -183,38 +212,60 @@ int main(int argc, char * argv[])
       if (num_exp > 1) {
         cerr << "Warning: skipping " << num_exp - 1 << " raw frames" << endl;
       }
-
       for (unsigned int i = 0; i < num_exp; i++) {
-        // // fetch a raw frame into 'raw_img' from the video input
-        // if (not video_input.read_frame(tiled_img.get_frame())) {
-        //   throw runtime_error("Reached the end of video input");
-        // }
-
-        event_idx = (event_idx + 1) % raw_img_buffer_size;
+        frame_idx = (frame_idx + 1) % raw_img_buffer_size;
       }
 
       //debug
+      // auto ts_before_partition = timestamp_us();
+
+      // raw_img_buffer[frame_idx]->partition(); 
+      // TiledImage * img = raw_img_buffer[frame_idx];
+
+      // auto ts_before = timestamp_us();   
+
+      // for (int i = 0; i < n_row; i++) {
+      //   for (int j = 0; j < n_col; j++) {
+      //     RawImage & tile = img->get_tile(i, j);
+      //     encoders[i * n_col + j]->compress_frame(tile);
+      //     if (not encoders[i * n_col + j]->send_buf().empty()) {
+      //       poller.activate(video_sock, Poller::Out);
+      //     }
+      //   }
+      // }
+
+      raw_img_buffer[frame_idx]->partition(); 
+      TiledImage * img = raw_img_buffer[frame_idx];
+
+      // Create a vector to hold all the threads
+      std::vector<std::thread> encoding_threads;
+
+      for (int i = 0; i < n_row; i++) {
+          for (int j = 0; j < n_col; j++) {
+              encoding_threads.emplace_back([&, i, j]() {
+                  RawImage & tile = img->get_tile(i, j);
+                  encoders[i * n_col + j]->compress_frame(tile);
+              });
+          }
+      }
+
+      // Wait for all encoding threads to complete
+      for (std::thread &t : encoding_threads) {
+          t.join();
+      }
+
+      // After all threads have completed, check the send buffers and activate poller
+      for (int i = 0; i < n_row; i++) {
+          for (int j = 0; j < n_col; j++) {
+              if (not encoders[i * n_col + j]->send_buf().empty()) {
+                  poller.activate(video_sock, Poller::Out);
+              }
+          }
+      }
+
 
       
-
-      // auto ts_before_partition = timestamp_us();
-      raw_img_buffer[event_idx]->partition(); 
-      // auto ts_after_partition = timestamp_us();
-      // cerr << "Partition time: " << ts_after_partition - ts_before_partition << endl;
-
-
-      // auto ts_before_merge =timestamp_us();
-      raw_img_buffer[event_idx]->merge();
-      // auto ts_after_merge =timestamp_us();
-      // cerr << "Merge time: " << ts_after_merge - ts_before_merge << endl;
-
-      // compress 'raw_img' into frame 'frame_id' and packetize it
-      encoder.compress_frame(raw_img_buffer[event_idx]->get_frame());
-
-      // interested in socket being writable if there are datagrams to send
-      if (not encoder.send_buf().empty()) {
-        poller.activate(video_sock, Poller::Out);
-      }
+      
     }
   );
 
@@ -222,7 +273,7 @@ int main(int argc, char * argv[])
   poller.register_event(video_sock, Poller::Out,
     [&]()
     {
-      deque<FrameDatagram> & send_buf = encoder.send_buf();
+      deque<FrameDatagram> & send_buf = encoders[0]->send_buf();
 
       while (not send_buf.empty()) {
         auto & datagram = send_buf.front();
@@ -240,7 +291,7 @@ int main(int argc, char * argv[])
 
           // move the sent datagram to unacked if not a retransmission
           if (datagram.num_rtx == 0) {
-            encoder.add_unacked(move(datagram));
+            encoders[0]->add_unacked(move(datagram));
           }
 
           send_buf.pop_front();
@@ -282,10 +333,10 @@ int main(int argc, char * argv[])
         }
 
         // RTT estimation, retransmission, etc.
-        encoder.handle_ack(ack);
+        encoders[0]->handle_ack(ack);
 
         // send_buf might contain datagrams to be retransmitted now
-        if (not encoder.send_buf().empty()) {
+        if (not encoders[0]->send_buf().empty()) {
           poller.activate(video_sock, Poller::Out);
         }
       }
@@ -303,7 +354,7 @@ int main(int argc, char * argv[])
         return;
       }
       // output stats every second
-      encoder.output_periodic_stats();
+      encoders[0]->output_periodic_stats();
     }
   );
 
@@ -328,7 +379,7 @@ int main(int argc, char * argv[])
           
           // update the encoder's configuration
     
-          encoder.set_target_bitrate(signal->target_bitrate);
+          encoders[0]->set_target_bitrate(signal->target_bitrate);
         }
         // ignore invalid messages
         return;

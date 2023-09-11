@@ -72,11 +72,13 @@ int main(int argc, char * argv[])
   // argument parsing
   string output_path;
   bool verbose = false;
+  int raw_img_buffer_size = 60;
 
   const option cmd_line_opts[] = {
     {"mtu",     required_argument, nullptr, 'M'},
     {"output",  required_argument, nullptr, 'o'},
     {"verbose", no_argument,       nullptr, 'v'},
+    {"buffer",  required_argument, nullptr, 'B'},
     { nullptr,  0,                 nullptr,  0 },
   };
 
@@ -95,6 +97,9 @@ int main(int argc, char * argv[])
         break;
       case 'v':
         verbose = true;
+        break;
+      case 'B':
+        raw_img_buffer_size = strict_stoi(optarg);
         break;
       default:
         print_usage(argv[0]);
@@ -146,13 +151,12 @@ int main(int argc, char * argv[])
 
   // allocate a raw image
   // float viewpoint_x = 2048.0;
-  float viewpoint_x = 4096.0;
-  float viewpoint_y = viewpoint_x / 2;
+  float viewpoint_x = init_width / 2;
+  float viewpoint_y = init_height / 2;
   const auto crop_width = init_width / 2;
   const auto crop_height = init_height / 2;
 
   // initialize the raw image buffer implemented 
-  const int raw_img_buffer_size = 120;
   vector<CroppedImage*> raw_img_buffer;
   raw_img_buffer.resize(raw_img_buffer_size);
   for (int i = 0; i < raw_img_buffer_size; i++) {
@@ -164,7 +168,7 @@ int main(int argc, char * argv[])
       throw runtime_error("Faile to fill the raw frame buffer");
     }
   }
-  int event_idx = 0;
+  int frame_idx = 0;
   cerr << "Raw frame buffer filled" << endl;
 
   // CroppedImage crop_img(init_width, init_height, crop_width, crop_height);
@@ -202,19 +206,19 @@ int main(int argc, char * argv[])
         // cerr << "Reading time: " << ts_after_reading - ts_before_reading << endl;
 
         // creat a reference to the raw frame in the buffer
-        event_idx = (event_idx + 1) % raw_img_buffer_size;
+        frame_idx = (frame_idx + 1) % raw_img_buffer_size;
       }
 
       // debug
-      // auto ts_before_cropping = timestamp_us();      
-      // crop_img.crop(viewpoint_x, viewpoint_y, 4096, 2048); // 2.5 ms
-      // raw_img_buffer[event_idx]->crop(viewpoint_x, viewpoint_y, 2048, 1024);
-      raw_img_buffer[event_idx]->crop(viewpoint_x, viewpoint_y, 4096, 2048);
-      // auto ts_after_cropping = timestamp_us();
-      // cerr << "Cropping time: " << ts_after_cropping - ts_before_cropping << endl;
+      auto ts_before_cropping = timestamp_us();      
+ 
+      raw_img_buffer[frame_idx]->crop(viewpoint_x, viewpoint_y, crop_width, crop_height);
+      
+      auto ts_after_cropping = timestamp_us();
+      cerr << "Cropping time: " << ts_after_cropping - ts_before_cropping << endl;
 
       // compress 'raw_img' into frame 'frame_id' and packetize it
-      encoder.compress_frame(raw_img_buffer[event_idx]->get_cropped_frame());
+      encoder.compress_frame(raw_img_buffer[frame_idx]->get_cropped_frame());
 
       // interested in socket being writable if there are datagrams to send
       if (not encoder.send_buf().empty()) {

@@ -33,12 +33,16 @@ YUV4MPEG::YUV4MPEG(const string & video_file_path,
     switch (token[0]) {
       case 'W': // width
         if (strict_stoi(token.substr(1)) != display_width) {
+          cerr << "display width: " << display_width << endl;
+          cerr << "received frame width: " << token.substr(1) << endl;
           throw runtime_error("wrong YUV4MPEG2 frame width");
         }
         break;
 
       case 'H': // height
         if (strict_stoi(token.substr(1)) != display_height) {
+          cerr << "display height: " << display_height << endl;
+          cerr << "received frame height: " << token.substr(1) << endl;
           throw runtime_error("wrong YUV4MPEG2 frame height");
         }
         break;

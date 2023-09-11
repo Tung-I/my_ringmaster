@@ -11,7 +11,6 @@ CroppedImage::CroppedImage(uint16_t frame_width, uint16_t frame_height, uint16_t
 {}
 
 void CroppedImage::crop(float viewpoint_x, float viewpoint_y, uint16_t width, uint16_t  height) {
-
     // Calculate the starting indices for cropping. Round to nearest integers.
     int start_x = round(viewpoint_x - width / 2.0f);
     int start_y = round(viewpoint_y - height / 2.0f);
@@ -22,31 +21,68 @@ void CroppedImage::crop(float viewpoint_x, float viewpoint_y, uint16_t width, ui
     if (start_x + width > frame_width_) start_x = frame_width_ - width;
     if (start_y + height > frame_height_) start_y = frame_height_ - height;
 
-    // Perform the cropping operation
+    // For the Y plane
+    uint8_t* dest_ptr_y = cropped_img.y_plane();
+    uint8_t* src_ptr_y = frame_img.y_plane() + start_y * frame_img.y_stride() + start_x;
     for (int i = 0; i < height; ++i) {
-        for (int j = 0; j < width; ++j) {
-            // For the Y plane
-            cropped_img.y_plane()[i * cropped_img.y_stride() + j] =
-                frame_img.y_plane()[(start_y + i) * frame_img.y_stride() + start_x + j];
+        memcpy(dest_ptr_y, src_ptr_y, width);
+        dest_ptr_y += cropped_img.y_stride();
+        src_ptr_y += frame_img.y_stride();
+    }
 
-            // For the U and V planes, considering they may be sub-sampled
-            if (i < height / 2 && j < width / 2) {
-                cropped_img.u_plane()[i * cropped_img.u_stride() + j] =
-                    frame_img.u_plane()[(start_y / 2 + i) * frame_img.u_stride() + start_x / 2 + j];
-
-                cropped_img.v_plane()[i * cropped_img.v_stride() + j] =
-                    frame_img.v_plane()[(start_y / 2 + i) * frame_img.v_stride() + start_x / 2 + j];
-            }
-        }
+    // For the U and V planes
+    uint8_t* dest_ptr_u = cropped_img.u_plane();
+    uint8_t* src_ptr_u = frame_img.u_plane() + (start_y / 2) * frame_img.u_stride() + start_x / 2;
+    uint8_t* dest_ptr_v = cropped_img.v_plane();
+    uint8_t* src_ptr_v = frame_img.v_plane() + (start_y / 2) * frame_img.v_stride() + start_x / 2;
+    for (int i = 0; i < height / 2; ++i) {
+        memcpy(dest_ptr_u, src_ptr_u, width / 2);
+        memcpy(dest_ptr_v, src_ptr_v, width / 2);
+        dest_ptr_u += cropped_img.u_stride();
+        src_ptr_u += frame_img.u_stride();
+        dest_ptr_v += cropped_img.v_stride();
+        src_ptr_v += frame_img.v_stride();
     }
 }
+
+
+// void CroppedImage::crop(float viewpoint_x, float viewpoint_y, uint16_t width, uint16_t  height) {
+
+//     // Calculate the starting indices for cropping. Round to nearest integers.
+//     int start_x = round(viewpoint_x - width / 2.0f);
+//     int start_y = round(viewpoint_y - height / 2.0f);
+
+//     // Check for boundary conditions
+//     if (start_x < 0) start_x = 0;
+//     if (start_y < 0) start_y = 0;
+//     if (start_x + width > frame_width_) start_x = frame_width_ - width;
+//     if (start_y + height > frame_height_) start_y = frame_height_ - height;
+
+//     // Perform the cropping operation
+//     for (int i = 0; i < height; ++i) {
+//         for (int j = 0; j < width; ++j) {
+//             // For the Y plane
+//             cropped_img.y_plane()[i * cropped_img.y_stride() + j] =
+//                 frame_img.y_plane()[(start_y + i) * frame_img.y_stride() + start_x + j];
+
+//             // For the U and V planes, considering they may be sub-sampled
+//             if (i < height / 2 && j < width / 2) {
+//                 cropped_img.u_plane()[i * cropped_img.u_stride() + j] =
+//                     frame_img.u_plane()[(start_y / 2 + i) * frame_img.u_stride() + start_x / 2 + j];
+
+//                 cropped_img.v_plane()[i * cropped_img.v_stride() + j] =
+//                     frame_img.v_plane()[(start_y / 2 + i) * frame_img.v_stride() + start_x / 2 + j];
+//             }
+//         }
+//     }
+// }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 TiledImage::TiledImage(uint16_t frame_width, uint16_t frame_height, uint16_t n_row, uint16_t n_col)
   : frame_img(frame_width, frame_height), n_row_(n_row), n_col_(n_col), 
   frame_width_(frame_img.display_width()), frame_height_(frame_img.display_height()),
-  tile_width_(frame_img.display_width() / n_row_), tile_height_(frame_img.display_height() / n_col_), 
+  tile_width_(frame_img.display_width() / n_col_), tile_height_(frame_img.display_height() / n_row_), 
   tiles([this](){
     std::vector<RawImage*> tmp;
     tmp.resize(n_row_ * n_col_);
