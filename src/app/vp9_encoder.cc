@@ -219,6 +219,9 @@ size_t Encoder::packetize_encoded_frame(uint16_t width, uint16_t height)
       // calculate the total fragments to send
       const uint16_t frag_cnt = narrow_cast<uint16_t>(
           frame_size / (FrameDatagram::max_payload + 1) + 1);
+
+      cerr << "frag_cnt: " << frag_cnt << endl;
+
       uint8_t * buf_ptr = static_cast<uint8_t *>(encoder_pkt->data.frame.buf);
       const uint8_t * const buf_end = buf_ptr + frame_size;
       for (uint16_t frag_id = 0; frag_id < frag_cnt; frag_id++) {

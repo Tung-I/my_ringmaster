@@ -168,12 +168,18 @@ int main(int argc, char * argv[])
         cerr << "Warning: skipping " << num_exp - 1 << " raw frames" << endl;
       }
 
+      // debug
+      auto ts_before_reading = timestamp_us();   
+
       for (unsigned int i = 0; i < num_exp; i++) {
         // fetch a raw frame into 'raw_img' from the video input
         if (not video_input.read_frame(raw_img)) {
           throw runtime_error("Reached the end of video input");
         }
       }
+
+      auto ts_after_reading = timestamp_us();
+      cerr << "Reading time: " << ts_after_reading - ts_before_reading << endl;
 
       // compress 'raw_img' into frame 'frame_id' and packetize it
       encoder.compress_frame(raw_img);

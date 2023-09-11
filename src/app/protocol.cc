@@ -2,6 +2,8 @@
 #include "protocol.hh"
 #include "serialization.hh"
 
+#include "timestamp.hh"
+
 using namespace std;
 
 BaseDatagram::BaseDatagram(const uint32_t _frame_id,
@@ -93,9 +95,9 @@ size_t FrameDatagram::max_payload = 1500 - 28 - FrameDatagram::HEADER_SIZE; // 2
 
 void FrameDatagram::set_mtu(const size_t mtu)
 {
-  if (mtu > 1500 or mtu < 512) {
-    throw runtime_error("reasonable MTU is between 512 and 1500 bytes");
-  }
+  // if (mtu > 1500 or mtu < 512) {
+  //   throw runtime_error("reasonable MTU is between 512 and 1500 bytes");
+  // }
   max_payload = mtu - 28 - FrameDatagram::HEADER_SIZE; // MTU - (IP + UDP headers) - Datagram header
 }
 

@@ -13,6 +13,7 @@ FileDescriptor::FileDescriptor(const int fd)
   : fd_(fd), eof_(false)
 {
   // set close-on-exec flag by default to prevent fds from leaking
+  // ensure that the file descriptor is closed automatically when a new program is exec'ed
   check_syscall(fcntl(fd_, F_SETFD, FD_CLOEXEC));
 }
 
@@ -130,6 +131,20 @@ string FileDescriptor::read(const size_t limit)
   return {buf.data(), bytes_read};
 }
 
+string FileDescriptor::pread(const size_t limit)
+{
+  vector<char> buf(min(MAX_BUF_SIZE, limit));
+
+  const size_t bytes_read = check_syscall(::pread(fd_, buf.data(), buf.size(), 0));
+
+  if (bytes_read == 0) {
+    eof_ = true; // EOF reached
+  }
+
+  return {buf.data(), bytes_read};
+}
+
+
 string FileDescriptor::readn(const size_t n, const bool allow_partial_read)
 {
   if (n == 0) {
@@ -141,7 +156,7 @@ string FileDescriptor::readn(const size_t n, const bool allow_partial_read)
 
   while (total_read != n) {
     const size_t bytes_read = check_syscall(
-      ::read(fd_, buf.data() + total_read, n - total_read));
+      ::read(fd_, buf.data() + total_read, n - total_read)); 
 
     if (bytes_read == 0) {
       eof_ = true;
@@ -156,7 +171,24 @@ string FileDescriptor::readn(const size_t n, const bool allow_partial_read)
     total_read += bytes_read;
   }
 
-  return {buf.data(), total_read};
+  return {buf.data(), total_read}; 
+}
+
+string FileDescriptor::preadn(const size_t n, const uint64_t offset)
+{
+  if (n == 0) {
+    throw std::runtime_error("attempted to read 0 bytes");
+  }
+
+  vector<char> buf(n);
+  const size_t bytes_read = check_syscall(
+    ::pread(fd_, buf.data(), n, offset));
+
+  if (bytes_read == 0) {
+    eof_ = true;
+  }
+
+  return {buf.data(), bytes_read};
 }
 
 string FileDescriptor::getline()
@@ -175,6 +207,7 @@ string FileDescriptor::getline()
 
   return ret;
 }
+
 
 uint64_t FileDescriptor::seek(const int64_t offset, const int whence)
 {

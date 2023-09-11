@@ -50,6 +50,10 @@ public:
   // blocking I/O only: read exactly N bytes of data
   std::string readn(const size_t n, const bool allow_partial_read = false);
 
+  // without altering the current file offset 
+  std::string pread(const size_t limit = MAX_BUF_SIZE);
+  std::string preadn(const size_t n, const uint64_t offset);
+
   // blocking I/O only: read one line of data
   std::string getline();
 

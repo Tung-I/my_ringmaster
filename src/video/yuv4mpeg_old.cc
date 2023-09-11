@@ -89,27 +89,3 @@ bool YUV4MPEG::read_frame(RawImage & raw_img)
 
   return true;
 }
-
-
-// bool YUV4MPEG::read_frames(std::vector<RawImage> & raw_img_buf)
-// {
-//   // Verify that all RawImage objects have the expected dimensions
-//   for (auto& raw_img : raw_img_buf) {
-//     if (raw_img.display_width() != display_width_ || 
-//         raw_img.display_height() != display_height_) {
-//       throw std::runtime_error("YUV4MPEG: image dimensions don't match");
-//     }
-//   }
-
-//   // Read each frame and store it in the corresponding RawImage object
-//   for (auto& raw_img : raw_imgs) {
-//     bool success = read_frame(raw_img);
-//     if (!success) {
-//       // If read_frame returns false, we've reached EOF or another issue
-//       // and should stop reading further frames.
-//       return false;
-//     }
-//   }
-
-//   return true;
-// }

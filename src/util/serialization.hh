@@ -6,6 +6,8 @@
 #include <string>
 #include <string_view>
 
+#include <iostream>
+
 // convert values from network to host byte order
 inline uint8_t ntoh(uint8_t net) { return net; }
 inline uint16_t ntoh(uint16_t net) { return be16toh(net); }

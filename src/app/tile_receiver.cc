@@ -11,6 +11,7 @@
 #include "sdl.hh"
 #include "protocol.hh"
 #include "vp9_decoder.hh"
+#include "timestamp.hh"
 
 using namespace std;
 using namespace chrono;
@@ -126,9 +127,25 @@ int main(int argc, char * argv[])
   while (true) {
     // parse a datagram received from sender
     FrameDatagram datagram;
-    if (not datagram.parse_from_string(video_sock.recv().value())) {
+
+    // debug
+    
+    // if (not datagram.parse_from_string(video_sock.recv().value())) {
+    //   throw runtime_error("failed to parse a datagram");
+    // }
+
+    auto ts_before_recv = timestamp_us();
+
+    string datagram_str = video_sock.recv().value();
+
+    auto ts_after_recv = timestamp_us();
+    cerr << "Parsing time: " << ts_after_recv- ts_before_recv << endl;
+
+    if (not datagram.parse_from_string(datagram_str)) {
       throw runtime_error("failed to parse a datagram");
     }
+
+  
 
     // send an ACK back to sender
     AckMsg ack(datagram);

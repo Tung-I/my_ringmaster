@@ -145,11 +145,29 @@ int main(int argc, char * argv[])
   YUV4MPEG video_input(y4m_path, init_width, init_height);
 
   // allocate a raw image
-  float viewpoint_x = 2048.0;
+  // float viewpoint_x = 2048.0;
+  float viewpoint_x = 4096.0;
   float viewpoint_y = viewpoint_x / 2;
   const auto crop_width = init_width / 2;
   const auto crop_height = init_height / 2;
-  CroppedImage crop_img(init_width, init_height, crop_width, crop_height);
+
+  // initialize the raw image buffer implemented 
+  const int raw_img_buffer_size = 120;
+  vector<CroppedImage*> raw_img_buffer;
+  raw_img_buffer.resize(raw_img_buffer_size);
+  for (int i = 0; i < raw_img_buffer_size; i++) {
+    raw_img_buffer[i] = new CroppedImage(init_width, init_height, crop_width, crop_height);
+  }
+  // read the raw video frames into the buffer
+  for (int i = 0; i < raw_img_buffer_size; i++) {
+    if (not video_input.read_frame(raw_img_buffer[i]->get_frame())) {
+      throw runtime_error("Faile to fill the raw frame buffer");
+    }
+  }
+  int event_idx = 0;
+  cerr << "Raw frame buffer filled" << endl;
+
+  // CroppedImage crop_img(init_width, init_height, crop_width, crop_height);
 
   // initialize the encoder
   Encoder encoder(crop_width, crop_height, init_frame_rate, output_path);
@@ -173,22 +191,36 @@ int main(int argc, char * argv[])
       }
 
       for (unsigned int i = 0; i < num_exp; i++) {
-        // fetch a raw frame into 'raw_img' from the video input
-        if (not video_input.read_frame(crop_img.get_frame())) {
-          throw runtime_error("Reached the end of video input");
-        }
+
+        // // debug
+        // auto ts_before_reading = timestamp_us();   
+        // // fetch a raw frame into 'raw_img' from the video input
+        // if (not video_input.read_frame(crop_img.get_frame())) {
+        //   throw runtime_error("Reached the end of video input");
+        // }
+        // auto ts_after_reading = timestamp_us();
+        // cerr << "Reading time: " << ts_after_reading - ts_before_reading << endl;
+
+        // creat a reference to the raw frame in the buffer
+        event_idx = (event_idx + 1) % raw_img_buffer_size;
       }
 
       // debug
-      crop_img.crop(viewpoint_x, viewpoint_y, 2048, 1024);
+      // auto ts_before_cropping = timestamp_us();      
+      // crop_img.crop(viewpoint_x, viewpoint_y, 4096, 2048); // 2.5 ms
+      // raw_img_buffer[event_idx]->crop(viewpoint_x, viewpoint_y, 2048, 1024);
+      raw_img_buffer[event_idx]->crop(viewpoint_x, viewpoint_y, 4096, 2048);
+      // auto ts_after_cropping = timestamp_us();
+      // cerr << "Cropping time: " << ts_after_cropping - ts_before_cropping << endl;
 
       // compress 'raw_img' into frame 'frame_id' and packetize it
-      encoder.compress_frame(crop_img.get_cropped_frame());
+      encoder.compress_frame(raw_img_buffer[event_idx]->get_cropped_frame());
 
       // interested in socket being writable if there are datagrams to send
       if (not encoder.send_buf().empty()) {
         poller.activate(video_sock, Poller::Out);
       }
+
     }
   );
 

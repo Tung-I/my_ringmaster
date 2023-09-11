@@ -4,6 +4,7 @@
 #include <string>
 #include <mutex>
 #include <thread>
+#include <future>
 
 #include "file_descriptor.hh"
 #include "video_input.hh"
@@ -24,12 +25,16 @@ public:
   bool read_frame(RawImage & raw_img) override;
 
   // accessors
-  FileDescriptor & fd() { return fd_; }
+  FileDescriptor & fd_y() { return fd_y_; }
+  FileDescriptor & fd_u() { return fd_u_; }
+  FileDescriptor & fd_v() { return fd_v_; }
   uint16_t display_width() const override { return display_width_; }
   uint16_t display_height() const override { return display_height_; }
 
 private:
-  FileDescriptor fd_;
+  FileDescriptor fd_y_;
+  FileDescriptor fd_u_;
+  FileDescriptor fd_v_;
   uint16_t display_width_;
   uint16_t display_height_;
 

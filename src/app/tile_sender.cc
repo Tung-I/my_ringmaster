@@ -110,7 +110,7 @@ int main(int argc, char * argv[])
   const auto video_port = narrow_cast<uint16_t>(strict_stoi(argv[optind]));
   const auto signal_port = narrow_cast<uint16_t>(video_port + 1);
   const string y4m_path = argv[optind + 1];
-  UDPSocket video_sock;
+  UDPSocket video_sock; 
   video_sock.bind({"0", video_port});
   cerr << "Local address: " << video_sock.local_address().str() << endl;
   UDPSocket signal_sock;
@@ -144,8 +144,24 @@ int main(int argc, char * argv[])
   // open the video file
   YUV4MPEG video_input(y4m_path, init_width, init_height);
 
-  // allocate a raw image
-  TiledImage tiled_img(init_width, init_height, 2, 4);
+  // initialize the raw image buffer implemented 
+  const int raw_img_buffer_size = 300;
+  vector<TiledImage*> raw_img_buffer;
+  raw_img_buffer.resize(raw_img_buffer_size);
+  for (int i = 0; i < raw_img_buffer_size; i++) {
+    raw_img_buffer[i] = new TiledImage(init_width, init_height, 4, 8);
+  }
+  // read the raw video frames into the buffer
+  for (int i = 0; i < raw_img_buffer_size; i++) {
+    if (not video_input.read_frame(raw_img_buffer[i]->get_frame())) {
+      throw runtime_error("Faile to fill the raw frame buffer");
+    }
+    if (i % 10 == 9) {
+      cerr << "Raw frame buffer filled: " << i + 1 << " frames" << endl;
+    }
+  }
+  int event_idx = 0;  // index of the next raw frame to be sent
+
 
   // initialize the encoder
   Encoder encoder(init_width, init_height, init_frame_rate, output_path);
@@ -169,24 +185,31 @@ int main(int argc, char * argv[])
       }
 
       for (unsigned int i = 0; i < num_exp; i++) {
-        // fetch a raw frame into 'raw_img' from the video input
-        if (not video_input.read_frame(tiled_img.get_frame())) {
-          throw runtime_error("Reached the end of video input");
-        }
+        // // fetch a raw frame into 'raw_img' from the video input
+        // if (not video_input.read_frame(tiled_img.get_frame())) {
+        //   throw runtime_error("Reached the end of video input");
+        // }
+
+        event_idx = (event_idx + 1) % raw_img_buffer_size;
       }
 
       //debug
-      auto ts_before_partition = timestamp_us();
-      tiled_img.partition(); // ~13ms w/o multi-threading; 3ms w/ multi-threading
-      auto ts_after_partition =timestamp_us();
-      cerr << "Partition time: " << ts_after_partition - ts_before_partition << endl;
-      auto ts_before_merge =timestamp_us();
-      tiled_img.merge(); // ~12ms w/o multi-threading; 2.8ms w/ multi-threading
-      auto ts_after_merge =timestamp_us();
-      cerr << "Merge time: " << ts_after_merge - ts_before_merge << endl;
+
+      
+
+      // auto ts_before_partition = timestamp_us();
+      raw_img_buffer[event_idx]->partition(); 
+      // auto ts_after_partition = timestamp_us();
+      // cerr << "Partition time: " << ts_after_partition - ts_before_partition << endl;
+
+
+      // auto ts_before_merge =timestamp_us();
+      raw_img_buffer[event_idx]->merge();
+      // auto ts_after_merge =timestamp_us();
+      // cerr << "Merge time: " << ts_after_merge - ts_before_merge << endl;
 
       // compress 'raw_img' into frame 'frame_id' and packetize it
-      encoder.compress_frame(tiled_img.get_frame());
+      encoder.compress_frame(raw_img_buffer[event_idx]->get_frame());
 
       // interested in socket being writable if there are datagrams to send
       if (not encoder.send_buf().empty()) {
