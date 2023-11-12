@@ -1,11 +1,14 @@
 /.vscode
 
-##### Python
+##### src
+src/app/*receiver
+src/app*sender
 
 ##### Data
 videos/*
 output/*
 audios/*
+result/*
 
 ##### C++
 
