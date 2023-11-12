@@ -240,3 +240,76 @@ void RawImage::copy_v_from(const string_view src)
 
   memcpy(v_plane(), src.data(), src.size());
 }
+
+
+void RawImage::yuv_to_rgb(const uint8_t* y_plane, const uint8_t* u_plane, const uint8_t* v_plane, uint8_t* rgb_data, uint16_t width, uint16_t height, int y_stride, int u_stride, int v_stride) {
+  for (uint16_t y = 0; y < height; ++y) {
+    for (uint16_t x = 0; x < width; ++x) {
+      // Get Y, U, and V values
+      uint8_t Y = y_plane[y * y_stride + x];
+      uint8_t U = u_plane[(y / 2) * u_stride + (x / 2)];
+      uint8_t V = v_plane[(y / 2) * v_stride + (x / 2)];
+
+      // Convert YUV to RGB
+      int C = Y - 16;
+      int D = U - 128;
+      int E = V - 128;
+
+      uint8_t r = static_cast<uint8_t>(std::clamp((298 * C + 409 * E + 128) >> 8, 0, 255));
+      uint8_t g = static_cast<uint8_t>(std::clamp((298 * C - 100 * D - 208 * E + 128) >> 8, 0, 255));
+      uint8_t b = static_cast<uint8_t>(std::clamp((298 * C + 516 * D + 128) >> 8, 0, 255));
+
+      // Assign to rgb_data
+      int rgb_index = (y * width + x) * 3;
+      rgb_data[rgb_index] = r;
+      rgb_data[rgb_index + 1] = g;
+      rgb_data[rgb_index + 2] = b;
+    }
+  }
+}
+
+
+void RawImage::save_frame(const std::string file_path) {
+  // Convert YUV to RGB
+  std::vector<uint8_t> rgb_data(display_width_ * display_height_ * 3); // RGB has 3 bytes per pixel
+  yuv_to_rgb(y_plane(), u_plane(), v_plane(), rgb_data.data(), display_width_, display_height_, y_stride(), u_stride(), v_stride());
+
+  // Save RGB data as PNG
+  FILE *fp = fopen(file_path.c_str(), "wb");
+  if (!fp) {
+    throw std::runtime_error("Failed to open file for writing");
+  }
+
+  png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+  if (!png_ptr) {
+    fclose(fp);
+    throw std::runtime_error("Failed to create PNG write structure");
+  }
+
+  png_infop info_ptr = png_create_info_struct(png_ptr);
+  if (!info_ptr) {
+    png_destroy_write_struct(&png_ptr, (png_infopp)nullptr);
+    fclose(fp);
+    throw std::runtime_error("Failed to create PNG info structure");
+  }
+
+  if (setjmp(png_jmpbuf(png_ptr))) {
+    png_destroy_write_struct(&png_ptr, &info_ptr);
+    fclose(fp);
+    throw std::runtime_error("PNG write error occurred");
+  }
+
+  png_init_io(png_ptr, fp);
+  png_set_IHDR(png_ptr, info_ptr, display_width_, display_height_, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+  png_write_info(png_ptr, info_ptr);
+
+  for (uint16_t y = 0; y < display_height_; ++y) {
+    png_write_row(png_ptr, &rgb_data[y * display_width_ * 3]);
+  }
+
+  png_write_end(png_ptr, nullptr);
+  png_destroy_write_struct(&png_ptr, &info_ptr);
+  fclose(fp);
+}
+
+

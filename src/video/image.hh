@@ -9,6 +9,12 @@ extern "C" {
 #include <vector>
 #include <cmath>
 
+#include <png.h>
+#include <stdexcept>
+#include <vector>
+#include <cstdint>
+#include <algorithm>
+
 // wrapper class for vpx_image of format I420
 class RawImage
 {
@@ -50,6 +56,10 @@ public:
   void copy_y_from(const std::string_view src);
   void copy_u_from(const std::string_view src);
   void copy_v_from(const std::string_view src);
+
+  // svae image as a PNG file
+  void save_frame(const std::string file_path);
+  void yuv_to_rgb(const uint8_t* y_plane, const uint8_t* u_plane, const uint8_t* v_plane, uint8_t* rgb_data, uint16_t width, uint16_t height, int y_stride, int u_stride, int v_stride);
 
   // forbid copy and move operators  
   RawImage(const RawImage & other) = delete;

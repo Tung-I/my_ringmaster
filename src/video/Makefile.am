@@ -13,4 +13,5 @@ libvideo_a_SOURCES = \
 bin_PROGRAMS = webcam
 
 webcam_SOURCES = webcam.cc
-webcam_LDADD = libvideo.a ../util/libutil.a $(VPX_LIBS) $(SDL_LIBS) -lpthread
+# webcam_LDADD = libvideo.a ../util/libutil.a $(VPX_LIBS) $(SDL_LIBS) -lpthread
+webcam_LDADD = libvideo.a ../util/libutil.a $(LIBPNG_LIBS) $(VPX_LIBS) $(SDL_LIBS) -lpthread

@@ -89,6 +89,10 @@ private:
   double total_encode_time_ms_ {0.0};
   double max_encode_time_ms_ {0.0};
 
+  unsigned int total_num_rtx_ {0};
+  unsigned int total_num_recovery_ {0};
+  
+
   // constants
   static constexpr unsigned int MAX_NUM_RTX = 3;
   static constexpr uint64_t MAX_UNACKED_US = 1000 * 1000; // 1 second

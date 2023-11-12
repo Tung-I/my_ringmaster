@@ -19,6 +19,8 @@ AC_PROG_CC
 # Checks for libraries.
 PKG_CHECK_MODULES([VPX],[vpx])
 PKG_CHECK_MODULES([SDL],[sdl2])
+# Checks for libpng library
+PKG_CHECK_MODULES([LIBPNG], [libpng >= 1.6])
 
 # Checks for header files.
 

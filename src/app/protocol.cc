@@ -30,6 +30,7 @@ TileDatagram::TileDatagram(const uint32_t _frame_id,
     tile_id(_tile_id), frame_width(_frame_width), frame_height(_frame_height)
 {}
 
+// 1500 - 28 - 21 = 1451
 size_t TileDatagram::max_payload = 1500 - 28 - TileDatagram::HEADER_SIZE; // 28: IP + UDP headers
 
 void TileDatagram::set_mtu(const size_t mtu)

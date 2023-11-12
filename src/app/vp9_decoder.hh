@@ -123,6 +123,7 @@ private:
   unsigned int num_decodable_frames_ {0};
   size_t total_decodable_frame_size_ {0}; // bytes
   std::chrono::time_point<std::chrono::steady_clock> last_stats_time_ {};
+  unsigned int total_datagrams_recv_ {0};
 
   // shared between main (Decoder) and worker threads
   std::mutex mtx_ {};

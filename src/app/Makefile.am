@@ -1,7 +1,7 @@
 AM_CPPFLAGS = $(CXX17_FLAGS) -I$(srcdir)/../util -I$(srcdir)/../video
 AM_CXXFLAGS = $(PICKY_CXXFLAGS)
 BASE_LDADD = ../video/libvideo.a ../util/libutil.a \
-	$(VPX_LIBS) $(SDL_LIBS) -lpthread
+	$(LIBPNG_LIBS) $(VPX_LIBS) $(SDL_LIBS) -lpthread
 
 
 bin_PROGRAMS = udp_sender udp_receiver tile_sender tile_receiver crop_sender crop_receiver

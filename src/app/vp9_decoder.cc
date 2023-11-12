@@ -116,19 +116,16 @@ bool Decoder::add_datagram_common(const FrameDatagram & datagram)
   const auto frame_id = datagram.frame_id;
   const auto frame_type = datagram.frame_type;
   const auto frag_cnt = datagram.frag_cnt;
-
   // ignore any datagrams from the old frames
   if (frame_id < next_frame_) {
     return false;
   }
-
+  // initialize a Frame instance for frame 'frame_id'
   if (not frame_buf_.count(frame_id)) {
-    // initialize a Frame instance for frame 'frame_id'
     frame_buf_.emplace(piecewise_construct, 
                        forward_as_tuple(frame_id),
                        forward_as_tuple(frame_id, frame_type, frag_cnt)); 
   }
-
   return true;
 }
 
@@ -137,8 +134,6 @@ void Decoder::add_datagram(const FrameDatagram & datagram)
   if (not add_datagram_common(datagram)) {
     return;
   }
-
-  // copy the fragment into the frame
   frame_buf_.at(datagram.frame_id).insert_frag(datagram);
 }
 
@@ -147,15 +142,12 @@ void Decoder::add_datagram(FrameDatagram && datagram)
   if (not add_datagram_common(datagram)) {
     return;
   }
-
-  // move the fragment into the frame
   frame_buf_.at(datagram.frame_id).insert_frag(move(datagram));
 }
 
 bool Decoder::next_frame_complete()
 {
   {
-    // check if the next frame to expect is complete
     // if the frame is in the buffer and all of its fragments have been received
     auto it = as_const(frame_buf_).find(next_frame_);
     if (it != frame_buf_.end() and it->second.complete()) {
@@ -188,15 +180,16 @@ bool Decoder::next_frame_complete()
 
 void Decoder::consume_next_frame()
 {
+  // only be called when next_frame_ is complete
   Frame & frame = frame_buf_.at(next_frame_);
   if (not frame.complete()) {
     throw runtime_error("next frame must be complete before consuming it");
   }
-
-  // found a decodable frame; update (and output) stats
   num_decodable_frames_++;
   const size_t frame_size = frame.frame_size().value();
   total_decodable_frame_size_ += frame_size;
+  total_datagrams_recv_ += frame.frags().size();
+
   // output stats 
   const auto stats_now = steady_clock::now();
   while (stats_now >= last_stats_time_ + 1s) {
@@ -211,34 +204,24 @@ void Decoder::consume_next_frame()
            << endl;
     }
 
-    // reset stats
     num_decodable_frames_ = 0;
     total_decodable_frame_size_ = 0;
     last_stats_time_ += 1s;
   }
 
+  // put the frame into the shared queue
   if (lazy_level_ <= DECODE_ONLY) {
-    // dispatch the frame to worker thread
     {
       lock_guard<mutex> lock(mtx_);
       shared_queue_.emplace_back(move(frame));
     } // release the lock before notifying the worker thread
-
     // notify worker thread
     cv_.notify_one();
   } else {
-    // // main thread outputs frame information if no worker thread
-    // if (output_fd_) {
-    //   const auto frame_decodable_ts = timestamp_us();
-
-    //   output_fd_->write(to_string(next_frame_) + "," +
-    //                     to_string(frame_size) + "," + 
-    //                     to_string(frame_decodable_ts) + "," + 
-    //                     to_string(num_decodable_frames_) + "\n");
-    // }
+    // do nothing if lazy_level_ is NO_DECODE_DISPLAY
   }
 
-  // move onto the next frame
+  // set next_frame_ and clean up old frames in frame_buf_
   advance_next_frame();
 }
 
@@ -261,15 +244,14 @@ void Decoder::clean_up_to(const uint32_t frontier)
 
 double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
 {
+  // be called only when the frame is complete
   if (not frame.complete()) {
     throw runtime_error("frame must be complete before decoding");
   }
 
-  // allocate a decoding buffer once
+  // allocate a decoding buffer and copy the payload of the frame's datagrams into it
   static constexpr size_t MAX_DECODING_BUF = 1000000; // 1 MB
   static vector<uint8_t> decode_buf(MAX_DECODING_BUF);
-
-  // copy the payload of the frame's datagrams to 'decode_buf'
   uint8_t * buf_ptr = decode_buf.data();
   const uint8_t * const buf_end = buf_ptr + decode_buf.size();
 
@@ -286,7 +268,7 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
 
   const size_t frame_size = buf_ptr - decode_buf.data(); 
 
-  // decode the compressed frame in 'decode_buf'
+  // call the decoder
   const auto decode_start = steady_clock::now();
   check_call(vpx_codec_decode(&context, decode_buf.data(), frame_size,
                               nullptr, 1),
@@ -315,6 +297,12 @@ void Decoder::display_decoded_frame(vpx_codec_ctx_t & context,
 
     // construct a temporary RawImage that does not own the raw_img
     display.show_frame(RawImage(raw_img));
+
+    ///////////////////////////////////////////
+    // string filepath = "/home/tungi/Downloads/2M_4k.png";
+    // RawImage(raw_img).save_frame(filepath);
+    ///////////////////////////////////////////
+
   }
 }
 
@@ -325,11 +313,9 @@ void Decoder::worker_main()
   if (lazy_level_ == NO_DECODE_DISPLAY) {
     return;
   }
-
   // initialize a VP9 decoding context
   const unsigned int max_threads = min(get_nprocs(), 4);
   vpx_codec_dec_cfg_t cfg {max_threads, display_width_, display_height_};
-
   vpx_codec_ctx_t context;
   check_call(vpx_codec_dec_init(&context, &vpx_codec_vp9_dx_algo, &cfg, 0),
              VPX_CODEC_OK, "vpx_codec_dec_init");
@@ -337,16 +323,16 @@ void Decoder::worker_main()
   cerr << "[worker] Initialized decoder (max threads: "
        << max_threads << ")" << endl;
 
-  // video display
+  // initialize video displayer
   unique_ptr<VideoDisplay> display;
   if (lazy_level_ == DECODE_DISPLAY) {
     display = make_unique<VideoDisplay>(display_width_, display_height_);
   }
 
-  // local queue of frames
+  // local queue of each thread
   deque<Frame> local_queue;
 
-  // stats maintained by the worker thread
+  // stats maintained by the main thread
   unsigned int num_decoded_frames = 0;
   double total_decode_time_ms = 0.0;
   double max_decode_time_ms = 0.0;
@@ -373,10 +359,11 @@ void Decoder::worker_main()
 
       if (output_fd_) {
         const auto frame_decoded_ts = timestamp_us();
-        output_fd_->write(to_string(frame.id()) + "," +
-                          to_string(frame.frame_size().value()) + "," +
-                          to_string(frame_decoded_ts) + "," +
-                          to_string(decode_time_ms) + "\n"
+        output_fd_->write(to_string(frame_decoded_ts) + "," + // timestamp in us
+                          to_string(frame.id()) + "," +  // frame ID
+                          to_string(frame.frame_size().value()) + "," + // frame size
+                          to_string(decode_time_ms) + "," +
+                          to_string(total_datagrams_recv_) + "\n" // decode time
                           );
       }
 
